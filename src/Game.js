@@ -392,7 +392,9 @@ export class Game {
       this._lastX = e.clientX; this._lastY = e.clientY;
       const s = (this.save.data.settings.camSensitivity ?? 1) * 0.005;
       const invY = this.save.data.settings.camInvertY ? -1 : 1;
-      this.camYaw -= dx * s;                                  // drag right -> view pans right
+      // Classic mode keeps a FIXED world-aligned facing (no yaw orbit) so world-fixed
+      // controls always match the view; only Camera mode allows free yaw look.
+      if ((this.save.data.settings.camMode ?? 'camera') === 'camera') this.camYaw -= dx * s;
       this.camPitch = Math.max(this.camMinPitch, Math.min(this.camMaxPitch, this.camPitch + dy * s * invY));
       this._dragCooldown = 1.2;                               // hold this angle before auto-recenter
     });
@@ -412,10 +414,16 @@ export class Game {
     const tp = this.player.pos;
     if (this._dragCooldown > 0) this._dragCooldown -= dt;
     const moving = mv && mv.len > 0.12;
-    if (!this._dragging && this._dragCooldown <= 0 && moving) {
+    const classic = (this.save.data.settings.camMode ?? 'camera') === 'classic';
+    if (classic) {
+      // CLASSIC: fixed world-aligned camera (always behind +Z). No auto-rotate on turns,
+      // so "up on the stick = up on screen" stays consistent. Drag yaw is disabled above.
+      this.camYaw = this._lerpAngle(this.camYaw, 0, Math.min(1, dt * 5));
+    } else if (!this._dragging && this._dragCooldown <= 0 && moving) {
+      // CAMERA: gentle auto-recenter behind the movement heading (forward-only -> no spin).
       const cf = [Math.sin(this.camYaw), Math.cos(this.camYaw)];
       const ml = Math.hypot(mv.x, mv.z) || 1;
-      const fdot = (mv.x / ml) * cf[0] + (mv.z / ml) * cf[1]; // forward-ness of the movement
+      const fdot = (mv.x / ml) * cf[0] + (mv.z / ml) * cf[1];
       if (fdot > 0.35) this.camYaw = this._lerpAngle(this.camYaw, Math.atan2(mv.x, mv.z), Math.min(1, dt * 2));
     }
     const cp = Math.cos(this.camPitch), sp = Math.sin(this.camPitch);
