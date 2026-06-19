@@ -34,6 +34,7 @@ out.classic_yaw90 = await moveUnder('classic', Math.PI / 2);
 out.drag = await p.evaluate(() => ({ before: { yaw: +window.__ROS.game.camYaw.toFixed(3), pitch: +window.__ROS.game.camPitch.toFixed(3) } }));
 await p.evaluate(() => {
   const g = window.__ROS.game; g.startLevel(0); g.running = true; g.paused = false; g.camYaw = 0; g.camPitch = 0.66;
+  g.save.data.settings.camMode = 'camera'; // yaw-drag only active in camera mode
   document.getElementById('ui-root').style.display = 'none'; // real game clears the menu via UI.startLevel; we bypassed it
 });
 const box = await p.$eval('#game-canvas', (el) => { const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });

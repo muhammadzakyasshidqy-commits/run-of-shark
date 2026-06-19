@@ -21,6 +21,7 @@ export class UI {
     game.onWin = (i) => this._win(i);
     game.onLose = (i) => this._lose(i);
     game.onCine = (data) => this._cine(data);
+    game.onHubTrigger = (panel) => this._openHubPanel(panel);
     this.showMenu();
   }
 
@@ -28,7 +29,31 @@ export class UI {
   clear() { [...this.root.querySelectorAll('.screen')].forEach((s) => s.remove()); }
   open(builder) { this.clear(); const s = builder(); this.root.appendChild(s); return s; }
   btn(label, cls, fn) { const b = h('button', `btn ${cls || ''}`, label); b.onclick = () => { this.audio.click(); fn(); }; return b; }
-  back(fn) { return this.btn('◀ Back', 'ghost small', fn || (() => this.showMenu())); }
+  // Back button: when a panel was opened by walking into a hub zone, "Back" returns to
+  // the island (resume walking) instead of the main menu.
+  back(fn) {
+    if (!fn && this.game.mode === 'hub' && this.game.paused) return this.btn('◀ Back', 'ghost small', () => this._closeHubPanel());
+    return this.btn('◀ Back', 'ghost small', fn || (() => this.showMenu()));
+  }
+
+  // ---------- HUB navigation ----------
+  enterIsland() {
+    this.clear(); this.showHud(true);
+    this.audio.unlock();
+    this.fade(true, () => { this.game.enterHub(); this.fade(false); });
+    if (!matchMedia('(hover: none), (pointer: coarse)').matches) {
+      setTimeout(() => this.toast('⌨ WASD move · drag mouse to look · walk into a building'), 700);
+    } else {
+      setTimeout(() => this.toast('Joystick to move · drag right side to look'), 700);
+    }
+  }
+  returnToHub() { this.clear(); this.showHud(true); this.game.enterHub(); }
+  _openHubPanel(panel) {
+    const map = { bank: () => this.showBank(), shop: () => this.showShop(), garage: () => this.showGarage(), wheel: () => this.showWheel(), levels: () => this.showLevels() };
+    this.showHud(false);
+    (map[panel] || (() => this.returnToHub()))();
+  }
+  _closeHubPanel() { this.clear(); this.showHud(true); this.game.resumeHub(); }
 
   toast(msg) {
     let t = this.root.querySelector('.toast');
@@ -63,13 +88,19 @@ export class UI {
 
   _updateHud(s) {
     this.hud.querySelector('.hud-coins').textContent = s.coins;
-    this.hud.querySelector('.hud-hp').textContent = '❤️'.repeat(0) + s.hp;
     this.hud.querySelector('.hud-objective').textContent = s.objective;
-    this.hud.querySelector('.stamina-bar').style.width = `${s.stamina * 100}%`;
-    this.hud.querySelector('.danger').classList.toggle('on', !!s.danger);
+    // In the hub there is no combat: hide HP / stamina / boss / danger.
+    const hub = !!s.hub;
+    this.hud.querySelector('.hud-top').querySelector('.chip:nth-child(2)').style.display = hub ? 'none' : '';
+    this.hud.querySelector('.stamina-wrap').style.display = hub ? 'none' : '';
+    if (!hub) {
+      this.hud.querySelector('.hud-hp').textContent = s.hp;
+      this.hud.querySelector('.stamina-bar').style.width = `${s.stamina * 100}%`;
+    }
+    this.hud.querySelector('.danger').classList.toggle('on', !hub && !!s.danger);
     const bw = this.hud.querySelector('.boss-hp-wrap');
-    bw.classList.toggle('hidden', s.boss == null);
-    if (s.boss != null) this.hud.querySelector('.boss-hp-bar').style.width = `${Math.max(0, s.boss) * 100}%`;
+    bw.classList.toggle('hidden', hub || s.boss == null);
+    if (!hub && s.boss != null) this.hud.querySelector('.boss-hp-bar').style.width = `${Math.max(0, s.boss) * 100}%`;
   }
 
   // Cinematic banner for boss intro / defeat (driven by Game.onCine).
@@ -96,27 +127,29 @@ export class UI {
 
   // ---------- MENU ----------
   showMenu() {
-    this.game.running = false; this.showHud(false);
+    this.game.running = false; this.game.mode = 'menu'; this.showHud(false);
     this._checkDaily();
     this.open(() => {
       const s = h('div', 'screen');
       const card = h('div', 'card');
       card.appendChild(h('div', 'title', 'RUN OF <span class="accent">SHARK</span>'));
-      card.appendChild(h('div', 'subtitle', 'Dive • Collect • Escape the shark • Reach the submarine'));
+      card.appendChild(h('div', 'subtitle', 'Walk the island • Dive • Escape the shark'));
       const wallet = h('div', 'row');
       wallet.appendChild(h('div', 'chip coin-chip', `🪙 ${this.economy.s.coins}`));
       wallet.appendChild(h('div', 'chip', `💵 ${this.economy.s.cash}`));
       wallet.appendChild(h('div', 'chip', `💎 ${this.economy.s.gems}`));
       card.appendChild(wallet);
+      // Primary entry is now the physical island; Bank/Shop/Garage/Levels/Wheel are
+      // reached by WALKING into their buildings there (no menu shortcuts).
       const row1 = h('div', 'row');
-      row1.appendChild(this.btn('▶ PLAY', 'green', () => this.showLevels()));
+      row1.appendChild(this.btn('🏝️ ENTER ISLAND', 'green', () => this.enterIsland()));
       card.appendChild(row1);
       const grid = h('div', 'row');
-      [['🛒 Shop', () => this.showShop()], ['🏦 Bank', () => this.showBank()], ['🚗 Garage', () => this.showGarage()],
-       ['🎽 Skins', () => this.showInventory()], ['🏆 Awards', () => this.showAchievements()], ['🎁 Daily', () => this.showDaily()],
-       ['🎡 Wheel', () => this.showWheel()], ['⚙️ Settings', () => this.showSettings()]].forEach(([l, f]) =>
+      [['🎽 Skins', () => this.showInventory()], ['🏆 Awards', () => this.showAchievements()],
+       ['🎁 Daily', () => this.showDaily()], ['⚙️ Settings', () => this.showSettings()]].forEach(([l, f]) =>
         grid.appendChild(this.btn(l, 'small', f)));
       card.appendChild(grid);
+      card.appendChild(h('div', 'muted', 'On the island: Tower=Levels · Bank · Shop · Garage · Wheel · Dock'));
       s.appendChild(card);
       return s;
     });
@@ -161,8 +194,12 @@ export class UI {
       card.appendChild(this.btn('▶ Resume', 'green', () => { this.clear(); this.game.pause(false); }));
       card.appendChild(h('div', 'row', ''));
       const r = h('div', 'row');
-      r.appendChild(this.btn('Restart', 'small', () => { this.clear(); this.game.pause(false); this.startLevel(this.game.levelIndex); }));
-      r.appendChild(this.btn('Quit', 'small ghost', () => { this.game.disposeLevel(); this.game.pause(false); this.showMenu(); }));
+      const inHub = this.game.mode === 'hub';
+      if (!inHub) r.appendChild(this.btn('Restart', 'small', () => { this.clear(); this.game.pause(false); this.startLevel(this.game.levelIndex); }));
+      r.appendChild(this.btn(inHub ? 'Main Menu' : 'Quit', 'small ghost', () => {
+        this.game.pause(false);
+        if (inHub) { this.game.disposeLevel(); this.showMenu(); } else { this.returnToHub(); }
+      }));
       card.appendChild(r);
       s.appendChild(card); return s;
     });
@@ -189,8 +226,7 @@ export class UI {
       card.appendChild(h('div', 'subtitle', `Level ${lv.id} complete — +${reward} 🪙`));
       const r = h('div', 'row');
       r.appendChild(this.btn('Next ▶', 'green', () => this.startLevel(Math.min(i + 1, LEVELS.length - 1))));
-      r.appendChild(this.btn('Shop', 'small', () => this.showShop()));
-      r.appendChild(this.btn('Menu', 'small ghost', () => this.showMenu()));
+      r.appendChild(this.btn('🏝️ Island', 'small', () => this.returnToHub()));
       card.appendChild(r);
       // reward ad
       card.appendChild(h('div', 'row', ''));
@@ -209,7 +245,7 @@ export class UI {
       card.appendChild(h('div', 'subtitle', 'The shark got you...'));
       const r = h('div', 'row');
       r.appendChild(this.btn('Retry', 'green', () => this.startLevel(i)));
-      r.appendChild(this.btn('Menu', 'small ghost', () => this.showMenu()));
+      r.appendChild(this.btn('🏝️ Island', 'small ghost', () => this.returnToHub()));
       card.appendChild(r);
       card.appendChild(h('div', 'row', ''));
       card.appendChild(this.btn('📺 Watch Ad → Revive', 'gold small', async () => {

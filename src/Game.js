@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { WORLD, LEVELS } from './config.js';
 import { Player } from './entities/Player.js';
 import { Level } from './levels/Level.js';
+import { Hub } from './hub/Hub.js';
 import { Effects } from './effects/Effects.js';
 import { Input } from './systems/Input.js';
 import { rotateInput } from './systems/cameraRelative.js';
@@ -44,9 +45,12 @@ export class Game {
     this.clock = new THREE.Clock();
     this.running = false;
     this.paused = false;
+    this.mode = 'menu';        // 'menu' | 'hub' | 'level'
     this.level = null;
+    this.hub = null;
     this.player = null;
     this.shake = 0;
+    this.onHubTrigger = () => {}; // (panelId) -> UI opens the matching panel
 
     this.controlLocked = false;
     this.cinematic = null;     // function(dt) -> done:boolean, drives cutscene camera
@@ -206,16 +210,39 @@ export class Game {
     this.water.rotation.x = -Math.PI / 2;
     this.water.position.set(0, 2.5, waterCenterZ);
     this.scene.add(this.water);
-    const deep = new THREE.Mesh(new THREE.PlaneGeometry(WORLD.size * 4, waterDepth),
+    this.deepWater = new THREE.Mesh(new THREE.PlaneGeometry(WORLD.size * 4, waterDepth),
       new THREE.MeshStandardMaterial({ color: 0x0c5778, transparent: true, opacity: 0.5 }));
-    deep.rotation.x = -Math.PI / 2; deep.position.set(0, 1.2, waterCenterZ); this.scene.add(deep);
+    this.deepWater.rotation.x = -Math.PI / 2; this.deepWater.position.set(0, 1.2, waterCenterZ); this.scene.add(this.deepWater);
     this._waterBase = waterGeo.attributes.position.array.slice();
 
     this._buildBoundary();
   }
 
+  _setWater(visible) {
+    if (this.water) this.water.visible = visible;
+    if (this.deepWater) this.deepWater.visible = visible;
+    if (this.effects?.bubbles) this.effects.bubbles.visible = visible;
+  }
+
+  // Enter the walkable island hub (reuses Player + chase camera + camera-relative input).
+  enterHub() {
+    this.disposeLevel();
+    this.mode = 'hub';
+    this._setWater(false);             // dry island look
+    this.player = new Player(this.scene, this.economy, this._skinColor());
+    this.hub = new Hub(this.scene, this.economy, this.save);
+    this.player.pos.set(this.hub.spawn.x, 0.2, this.hub.spawn.z);
+    this.player.mesh.rotation.y = Math.PI; // face the island interior
+    this.camYaw = Math.PI;
+    this.running = true; this.paused = false; this.controlLocked = false; this.cinematic = null;
+    this.audio.startMusic();
+    this.input.setTouchVisible(true);
+  }
+
   startLevel(index) {
     this.disposeLevel();
+    this.mode = 'level';
+    this._setWater(true);
     const def = LEVELS[index];
     this.levelIndex = index;
     this.player = new Player(this.scene, this.economy, this._skinColor());
@@ -298,7 +325,15 @@ export class Game {
 
   disposeLevel() {
     if (this.level) { this.level.dispose(); this.level = null; }
+    if (this.hub) { this.hub.dispose(); this.hub = null; }
     if (this.player) { this.player.dispose(this.scene); this.player = null; }
+  }
+
+  // Called by the UI when a hub panel closes — resume walking and step out of the zone.
+  resumeHub() {
+    if (this.mode !== 'hub') return;
+    this.paused = false;
+    if (this.hub && this.player) this.hub.ejectFromZones(this.player);
   }
 
   pause(v) { this.paused = v; if (v) this.audio.stopMusic(); else this.audio.startMusic(); }
@@ -331,7 +366,7 @@ export class Game {
       return;
     }
 
-    if (this.running && !this.paused && this.level && this.player) {
+    if (this.running && !this.paused && this.player && (this.level || this.hub)) {
       const raw = this.controlLocked ? { x: 0, z: 0, len: 0, sprint: false } : this.input.read();
       // Camera-relative LAYER: rotate the world-fixed input by the camera yaw so
       // "forward" follows where the camera looks. Classic mode = passthrough (yaw 0 effect).
@@ -342,24 +377,26 @@ export class Game {
         mv = { x: r.x, z: r.z, len: raw.len, sprint: raw.sprint };
       }
       this.player.update(dt, mv);
-      const result = this.level.update(dt, this.player);
-
       this._updateCamera(dt, mv);
 
-      // boss charge / damage -> screen shake
-      if (this.player.invuln > 1.1) this.shake = 0.6;
-
-      this.onHud({
-        coins: this.economy.s.coins,
-        objective: this.level.objectiveText,
-        stamina: this.player.stamina / this.player.maxStamina,
-        hp: this.player.hp, maxHp: this.player.maxHp,
-        danger: this._nearestSharkDist() < 8,
-        boss: this.level.boss && this.level.boss.active ? this.level.boss.hp / this.level.boss.maxHp : null,
-      });
-
-      if (result === 'win') { this.running = false; this.onWin(this.levelIndex); }
-      else if (result === 'lose') { this.running = false; this.shake = 1.2; this.onLose(this.levelIndex); }
+      if (this.hub) {
+        const panel = this.hub.update(dt, this.player);
+        this.onHud({ hub: true, coins: this.economy.s.coins, objective: 'Walk into an area to enter it' });
+        if (panel) { this.paused = true; this.onHubTrigger(panel); }
+      } else {
+        const result = this.level.update(dt, this.player);
+        if (this.player.invuln > 1.1) this.shake = 0.6;
+        this.onHud({
+          coins: this.economy.s.coins,
+          objective: this.level.objectiveText,
+          stamina: this.player.stamina / this.player.maxStamina,
+          hp: this.player.hp, maxHp: this.player.maxHp,
+          danger: this._nearestSharkDist() < 8,
+          boss: this.level.boss && this.level.boss.active ? this.level.boss.hp / this.level.boss.maxHp : null,
+        });
+        if (result === 'win') { this.running = false; this.onWin(this.levelIndex); }
+        else if (result === 'lose') { this.running = false; this.shake = 1.2; this.onLose(this.levelIndex); }
+      }
     } else {
       // idle menu camera orbit
       this.camera.position.set(Math.sin(t * 0.1) * 50, 30, -60 + Math.cos(t * 0.1) * 20);
