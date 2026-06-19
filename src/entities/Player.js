@@ -9,7 +9,7 @@ export class Player {
     this.mesh = makeDiver(skinColor);
     scene.add(this.mesh);
     this.pos = this.mesh.position;
-    this.pos.set(0, 0.2, WORLD.beachZ + 6);
+    this.pos.set(0, 0.2, WORLD.beachZ + 4); // on the sand; Game.startLevel re-affirms this
     this.vel = new THREE.Vector3();
     this.stamina = economy.statValue('stamina');
     this.maxStamina = this.stamina;

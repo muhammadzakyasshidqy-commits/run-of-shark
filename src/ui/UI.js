@@ -147,6 +147,10 @@ export class UI {
     this.hud.querySelector('.hud-level').textContent = `LVL ${LEVELS[i].id}`;
     this.audio.unlock();
     this.fade(true, () => { this.game.startLevel(i); this.fade(false); });
+    // Desktop has no on-screen joystick — tell the player which keys to use.
+    if (!matchMedia('(hover: none), (pointer: coarse)').matches) {
+      setTimeout(() => this.toast('⌨ WASD / Arrow keys to move · Shift to sprint'), 700);
+    }
   }
 
   _pauseMenu() {

@@ -117,7 +117,11 @@ export class Shark {
     this.pos.z = Math.max(WORLD.beachZ, Math.min(b, this.pos.z));
   }
 
-  _face(dx, dz) { this.mesh.rotation.y = Math.atan2(dx, dz) + Math.PI / 2; }
+  // The shark model's snout points along LOCAL +X. A rotation.y of θ maps local +X to
+  // world (cosθ, -sinθ) on the XZ plane, so to face the movement (dx,dz) we need
+  // rotation.y = atan2(-dz, dx). (The old atan2(dx,dz)+PI/2 was written for a +Z-facing
+  // model and left the shark ~180° off — it swam backwards/sideways.)
+  _face(dx, dz) { this.mesh.rotation.y = Math.atan2(-dz, dx); }
 
   // Called when the boss crashes into an arena hazard. Returns true if this hit killed it.
   // Guarded by a cooldown so one crash counts as exactly one hit.

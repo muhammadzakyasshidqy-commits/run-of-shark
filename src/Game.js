@@ -24,7 +24,8 @@ export class Game {
     this.scene.fog = new THREE.Fog(0x0a3d62, 60, 180);
 
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 500);
-    this.camOffset = new THREE.Vector3(0, 14, -18);
+    this.camDist = 18; this.camHeight = 14; this.camAhead = 6;
+    this.camYaw = 0;               // smoothed heading the chase-cam trails behind
     this._camPos = new THREE.Vector3();
 
     this._buildEnvironment();
@@ -99,6 +100,32 @@ export class Game {
     return g;
   }
 
+  // Floating marker buoy (red float + white ring + pole + light) for the world edge.
+  _buoy(x, z) {
+    const g = new THREE.Group();
+    const m = (c, e = 0) => new THREE.MeshStandardMaterial({ color: c, flatShading: true, emissive: e });
+    const float = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), m(0xe53935));
+    float.scale.set(1, 0.8, 1); float.position.y = 2.5; g.add(float);
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.12, 6, 12), m(0xffffff));
+    band.rotation.x = Math.PI / 2; band.position.y = 2.5; g.add(band);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.6, 5), m(0x444444));
+    pole.position.y = 3.6; g.add(pole);
+    const light = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 5), m(0xffeb3b, 0x665500));
+    light.position.y = 4.4; g.add(light);
+    g.position.set(x, 0, z);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    return g;
+  }
+
+  // Ring of buoys along the playable boundary (clamped to ±WORLD.size, z>=beachZ),
+  // so the edge is visible BEFORE the player hits the invisible clamp.
+  _buildBoundary() {
+    const S = WORLD.size, step = 26;
+    const place = (x, z) => this.scene.add(this._buoy(x, z));
+    for (let z = WORLD.beachZ + 10; z <= S; z += step) { place(-S, z); place(S, z); } // side edges
+    for (let x = -S; x <= S; x += step) place(x, S);                                   // far edge
+  }
+
   _buildEnvironment() {
     const hemi = new THREE.HemisphereLight(0xcdeeff, 0x0a3a52, 1.05);
     this.scene.add(hemi);
@@ -127,47 +154,53 @@ export class Game {
     seabed.receiveShadow = true;
     this.scene.add(seabed);
 
-    // Beach strip (with a damp shoreline band for a sand->water transition)
+    // Dry sand beach sits BEHIND the spawn; the water only starts at the shoreline
+    // (this.shorelineZ) so the player visibly begins ON sand, not mid-ocean.
+    this.shorelineZ = WORLD.beachZ + 12;
     const beach = new THREE.Mesh(
-      new THREE.BoxGeometry(WORLD.size * 3, 1, 30),
+      new THREE.BoxGeometry(WORLD.size * 3, 1, 40),
       new THREE.MeshStandardMaterial({ color: 0xffe3a0, flatShading: true })
     );
-    beach.position.set(0, -0.5, WORLD.beachZ - 12);
+    beach.position.set(0, -0.4, WORLD.beachZ - 6); // spans ~[beachZ-26, beachZ+14]
     beach.receiveShadow = true;
     this.scene.add(beach);
     const shore = new THREE.Mesh(
-      new THREE.BoxGeometry(WORLD.size * 3, 1.02, 8),
-      new THREE.MeshStandardMaterial({ color: 0xe8c98a, flatShading: true })
+      new THREE.BoxGeometry(WORLD.size * 3, 1.02, 14),
+      new THREE.MeshStandardMaterial({ color: 0xe6c684, flatShading: true }) // wet sand band
     );
-    shore.position.set(0, -0.49, WORLD.beachZ + 2);
+    shore.position.set(0, -0.39, WORLD.beachZ + 7);
     shore.receiveShadow = true;
     this.scene.add(shore);
 
     // Palm trees + rocks so the beach reads as a real place, not a flat slab.
     for (let i = 0; i < 6; i++) {
       const x = (i - 2.5) * 28 + (Math.random() - 0.5) * 8;
-      this.scene.add(this._palm(x, WORLD.beachZ - 16 - Math.random() * 6));
+      this.scene.add(this._palm(x, WORLD.beachZ - 14 - Math.random() * 8));
     }
     for (let i = 0; i < 8; i++) {
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6 + Math.random(), 0),
         new THREE.MeshStandardMaterial({ color: 0x9a9183, flatShading: true }));
-      rock.position.set((Math.random() - 0.5) * WORLD.size * 2, 0, WORLD.beachZ - 2 - Math.random() * 8);
+      rock.position.set((Math.random() - 0.5) * WORLD.size * 2, 0, WORLD.beachZ - 8 - Math.random() * 10);
       rock.castShadow = true; this.scene.add(rock);
     }
 
-    // Water surface (animated). Two layers: bright translucent top + darker deep tint.
-    const waterGeo = new THREE.PlaneGeometry(WORLD.size * 4, WORLD.size * 4, 40, 40);
+    // Water surface (animated), starting at the shoreline so the beach stays dry.
+    const waterDepth = WORLD.size * 4;
+    const waterCenterZ = this.shorelineZ + waterDepth / 2; // near edge = shorelineZ
+    const waterGeo = new THREE.PlaneGeometry(WORLD.size * 4, waterDepth, 40, 40);
     this.water = new THREE.Mesh(waterGeo, new THREE.MeshStandardMaterial({
       color: 0x2aa7d8, transparent: true, opacity: 0.6, flatShading: true, metalness: 0.35, roughness: 0.25,
       emissive: 0x0a3d52, emissiveIntensity: 0.35,
     }));
     this.water.rotation.x = -Math.PI / 2;
-    this.water.position.y = 2.5;
+    this.water.position.set(0, 2.5, waterCenterZ);
     this.scene.add(this.water);
-    const deep = new THREE.Mesh(new THREE.PlaneGeometry(WORLD.size * 4, WORLD.size * 4),
+    const deep = new THREE.Mesh(new THREE.PlaneGeometry(WORLD.size * 4, waterDepth),
       new THREE.MeshStandardMaterial({ color: 0x0c5778, transparent: true, opacity: 0.5 }));
-    deep.rotation.x = -Math.PI / 2; deep.position.y = 1.2; this.scene.add(deep);
+    deep.rotation.x = -Math.PI / 2; deep.position.set(0, 1.2, waterCenterZ); this.scene.add(deep);
     this._waterBase = waterGeo.attributes.position.array.slice();
+
+    this._buildBoundary();
   }
 
   startLevel(index) {
@@ -176,7 +209,11 @@ export class Game {
     this.levelIndex = index;
     this.player = new Player(this.scene, this.economy, this._skinColor());
     this.level = new Level(this.scene, def, this.economy, this.audio, this.effects);
-    this.player.pos.set(this.level.boat.position.x, 0.2, this.level.boat.position.z + 3);
+    // Spawn ON the dry sand (a few units in front of the beach, behind the shoreline),
+    // facing the water — so the level opens on the beach, not mid-ocean.
+    this.player.pos.set(0, 0.2, WORLD.beachZ + 4);
+    this.player.mesh.rotation.y = 0; // face +Z (toward the water/objectives)
+    this.camYaw = 0;
     this.running = true;
     this.paused = false;
     this.controlLocked = false;
@@ -288,16 +325,8 @@ export class Game {
       this.player.update(dt, input);
       const result = this.level.update(dt, this.player);
 
-      // follow camera
-      const tp = this.player.pos;
-      this._camPos.set(tp.x + this.camOffset.x, this.camOffset.y, tp.z + this.camOffset.z);
-      this.camera.position.lerp(this._camPos, Math.min(1, dt * 4));
-      if (this.shake > 0) {
-        this.camera.position.x += (Math.random() - 0.5) * this.shake;
-        this.camera.position.y += (Math.random() - 0.5) * this.shake;
-        this.shake = Math.max(0, this.shake - dt * 2);
-      }
-      this.camera.lookAt(tp.x, 1, tp.z + 6);
+      // chase camera trails behind the player's current heading (dynamic POV)
+      this._chaseCamera(dt, input.len > 0.12);
 
       // boss charge / damage -> screen shake
       if (this.player.invuln > 1.1) this.shake = 0.6;
@@ -320,6 +349,30 @@ export class Game {
     }
 
     this.renderer.render(this.scene, this.camera);
+  }
+
+  _lerpAngle(a, b, t) {
+    let d = b - a;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return a + d * t;
+  }
+
+  // Third-person chase cam: sits behind the player's heading and looks along it.
+  // World-fixed controls are preserved (Input is untouched); only the VIEW orbits
+  // to follow the direction of travel, with smoothing on both yaw and position.
+  _chaseCamera(dt, moving) {
+    const tp = this.player.pos;
+    if (moving) this.camYaw = this._lerpAngle(this.camYaw, this.player.mesh.rotation.y, Math.min(1, dt * 3));
+    const fx = Math.sin(this.camYaw), fz = Math.cos(this.camYaw); // player forward (world XZ)
+    this._camPos.set(tp.x - fx * this.camDist, this.camHeight, tp.z - fz * this.camDist);
+    this.camera.position.lerp(this._camPos, Math.min(1, dt * 4));
+    if (this.shake > 0) {
+      this.camera.position.x += (Math.random() - 0.5) * this.shake;
+      this.camera.position.y += (Math.random() - 0.5) * this.shake;
+      this.shake = Math.max(0, this.shake - dt * 2);
+    }
+    this.camera.lookAt(tp.x + fx * this.camAhead, 1, tp.z + fz * this.camAhead);
   }
 
   _nearestSharkDist() {

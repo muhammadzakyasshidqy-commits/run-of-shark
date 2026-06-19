@@ -75,7 +75,8 @@ export class BossController {
     }
   }
 
-  _faceTarget() { this.boss.mesh.rotation.y = Math.atan2(this.lockDir.x, this.lockDir.z) + Math.PI / 2; }
+  // Snout points along local +X (same as the shark model) -> face lockDir with atan2(-z, x).
+  _faceTarget() { this.boss.mesh.rotation.y = Math.atan2(-this.lockDir.z, this.lockDir.x); }
 
   _clearWave() { this._waveMeshes.forEach((m) => this.scene.remove(m)); this._waveMeshes = []; }
 
