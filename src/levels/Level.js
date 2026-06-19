@@ -3,7 +3,7 @@
 // Boss levels and the final tsunami level are handled here too.
 import * as THREE from 'three';
 import { WORLD } from '../config.js';
-import { makeCoin, makeTreasure, makeCoral, makeBoat, makeSubmarine, makeShip, makeCar, makeHazard } from '../entities/Models.js';
+import { makeCoin, makeTreasure, makeCoral, makeBoat, makeSubmarine, makeShip, makeCar, makeHazard, makeDock } from '../entities/Models.js';
 import { Shark } from '../entities/Shark.js';
 import { BossController } from '../bosses/BossController.js';
 
@@ -36,7 +36,12 @@ export class Level {
   }
 
   _build() {
-    // Boat at the beach (spawn point)
+    // Wooden dock running from the beach into the water (decorative, no collision)
+    this.dock = makeDock(18);
+    this.dock.position.set(0, 0, WORLD.beachZ + 6);
+    this.scene.add(this.dock);
+
+    // Boat at the beach (spawn point), moored beside the dock
     this.boat = makeBoat(0x06d6a0);
     this.boat.position.set(6, 0.2, WORLD.beachZ + 4);
     this.scene.add(this.boat);
@@ -286,6 +291,7 @@ export class Level {
 
   dispose() {
     [...this.coins, ...this.corals, ...this.barriers].forEach((m) => this.scene.remove(m));
+    if (this.dock) this.scene.remove(this.dock);
     this.hazards.forEach((hz) => this.scene.remove(hz.mesh));
     if (this.bossCtrl) this.bossCtrl.dispose();
     this.sharks.forEach((s) => s.dispose(this.scene));

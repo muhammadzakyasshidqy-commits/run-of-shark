@@ -79,10 +79,30 @@ export class Game {
     }
   }
 
+  // Cartoon palm tree (trunk + fan of leaf cones + coconuts).
+  _palm(x, z) {
+    const g = new THREE.Group();
+    const m = (c, f = true) => new THREE.MeshStandardMaterial({ color: c, flatShading: f, roughness: 0.9 });
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.36, 4.5, 6), m(0x8a5a2b));
+    trunk.position.y = 2.2; trunk.rotation.z = 0.08; g.add(trunk);
+    for (let i = 0; i < 6; i++) {
+      const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2.6, 4), m(0x2ecc71));
+      leaf.position.y = 4.4; leaf.rotation.z = Math.PI / 2.3; leaf.rotation.y = (i / 6) * Math.PI * 2;
+      leaf.scale.set(0.5, 1, 1); g.add(leaf);
+    }
+    for (const a of [0.4, -0.3]) {
+      const coco = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 5), m(0x6b4226, false));
+      coco.position.set(Math.cos(a) * 0.3, 4.1, Math.sin(a) * 0.3); g.add(coco);
+    }
+    g.position.set(x, 0, z);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    return g;
+  }
+
   _buildEnvironment() {
-    const hemi = new THREE.HemisphereLight(0xbfefff, 0x06324a, 0.9);
+    const hemi = new THREE.HemisphereLight(0xcdeeff, 0x0a3a52, 1.05);
     this.scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff3d0, 1.1);
+    const sun = new THREE.DirectionalLight(0xfff3d0, 1.15);
     sun.position.set(40, 80, 20);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
@@ -107,23 +127,46 @@ export class Game {
     seabed.receiveShadow = true;
     this.scene.add(seabed);
 
-    // Beach strip
+    // Beach strip (with a damp shoreline band for a sand->water transition)
     const beach = new THREE.Mesh(
       new THREE.BoxGeometry(WORLD.size * 3, 1, 30),
-      new THREE.MeshStandardMaterial({ color: 0xffe8a3, flatShading: true })
+      new THREE.MeshStandardMaterial({ color: 0xffe3a0, flatShading: true })
     );
     beach.position.set(0, -0.5, WORLD.beachZ - 12);
     beach.receiveShadow = true;
     this.scene.add(beach);
+    const shore = new THREE.Mesh(
+      new THREE.BoxGeometry(WORLD.size * 3, 1.02, 8),
+      new THREE.MeshStandardMaterial({ color: 0xe8c98a, flatShading: true })
+    );
+    shore.position.set(0, -0.49, WORLD.beachZ + 2);
+    shore.receiveShadow = true;
+    this.scene.add(shore);
 
-    // Water surface (animated)
+    // Palm trees + rocks so the beach reads as a real place, not a flat slab.
+    for (let i = 0; i < 6; i++) {
+      const x = (i - 2.5) * 28 + (Math.random() - 0.5) * 8;
+      this.scene.add(this._palm(x, WORLD.beachZ - 16 - Math.random() * 6));
+    }
+    for (let i = 0; i < 8; i++) {
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6 + Math.random(), 0),
+        new THREE.MeshStandardMaterial({ color: 0x9a9183, flatShading: true }));
+      rock.position.set((Math.random() - 0.5) * WORLD.size * 2, 0, WORLD.beachZ - 2 - Math.random() * 8);
+      rock.castShadow = true; this.scene.add(rock);
+    }
+
+    // Water surface (animated). Two layers: bright translucent top + darker deep tint.
     const waterGeo = new THREE.PlaneGeometry(WORLD.size * 4, WORLD.size * 4, 40, 40);
     this.water = new THREE.Mesh(waterGeo, new THREE.MeshStandardMaterial({
-      color: 0x1e90c9, transparent: true, opacity: 0.55, flatShading: true, metalness: 0.3, roughness: 0.4,
+      color: 0x2aa7d8, transparent: true, opacity: 0.6, flatShading: true, metalness: 0.35, roughness: 0.25,
+      emissive: 0x0a3d52, emissiveIntensity: 0.35,
     }));
     this.water.rotation.x = -Math.PI / 2;
     this.water.position.y = 2.5;
     this.scene.add(this.water);
+    const deep = new THREE.Mesh(new THREE.PlaneGeometry(WORLD.size * 4, WORLD.size * 4),
+      new THREE.MeshStandardMaterial({ color: 0x0c5778, transparent: true, opacity: 0.5 }));
+    deep.rotation.x = -Math.PI / 2; deep.position.y = 1.2; this.scene.add(deep);
     this._waterBase = waterGeo.attributes.position.array.slice();
   }
 

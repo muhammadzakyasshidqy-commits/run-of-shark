@@ -8,7 +8,9 @@ export class Shark {
     this.def = SHARK_TYPES[typeKey];
     this.typeKey = typeKey;
     this.isBoss = typeKey === 'boss' || typeKey === 'kraken';
-    this.mesh = makeShark(this.def.color, this.def.scale);
+    this.mesh = makeShark(this.def.color, this.def.scale, typeKey);
+    this.aggression = 0.4;        // 0=calm cruise, 1=attacking (drives undulation + jaw)
+    this.aggressionTarget = 0.4;
     scene.add(this.mesh);
     this.pos = this.mesh.position;
     // spawn far behind the play area
@@ -57,15 +59,32 @@ export class Shark {
     if (this.isBoss && !this.externalControl) { this._updateBoss(dt, target); }
     else if (!this.isBoss) { this._chase(dt, target, this.speed); }
 
-    // tail wag
-    this.mesh.children.forEach((c, i) => { if (i === 3) c.rotation.x = Math.sin(this._t * 12) * 0.4; });
-    this.pos.y = -0.4 + Math.sin(this._t * 2) * 0.15;
+    this._swimAnim(dt);
+    this.pos.y = (this.isBoss ? -0.4 : -0.5) + Math.sin(this._t * 2) * 0.15;
+  }
+
+  // Body-undulation swim: a travelling sine wave ripples down the segments toward the
+  // tail; jaw gapes and the wave speeds up with `aggression` (set high during attacks).
+  _swimAnim(dt) {
+    this.aggression += (this.aggressionTarget - this.aggression) * Math.min(1, dt * 4);
+    const ud = this.mesh.userData;
+    const freq = 6 + this.aggression * 8;
+    const amp = 0.12 + this.aggression * 0.22;
+    if (ud.segments) {
+      for (const seg of ud.segments) {
+        const tailW = Math.max(0, (2 - seg.position.x) / 3.5); // 0 at head -> ~1 at tail
+        seg.position.z = Math.sin(this._t * freq - seg.position.x * 1.1) * amp * tailW;
+      }
+    }
+    if (ud.tail) ud.tail.rotation.y = Math.sin(this._t * freq) * (0.4 + this.aggression * 0.5);
+    if (ud.jaw) ud.jaw.rotation.z = -Math.PI / 2 - this.aggression * 0.45; // mouth opens when attacking
   }
 
   _chase(dt, target, speed) {
     const dx = target.x - this.pos.x;
     const dz = target.z - this.pos.z;
     const len = Math.hypot(dx, dz) || 1;
+    this.aggressionTarget = len < 12 ? 1 : 0.45; // lunge-feel when closing in
     this.pos.x += (dx / len) * speed * dt;
     this.pos.z += (dz / len) * speed * dt;
     this._face(dx, dz);

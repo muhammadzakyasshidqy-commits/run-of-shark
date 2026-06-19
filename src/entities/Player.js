@@ -53,12 +53,42 @@ export class Player {
     this._bob += dt * (input.len > 0.1 ? 10 : 3);
     this.mesh.position.y = 0.2 + Math.sin(this._bob) * 0.12;
 
+    this._animate(dt, input.len);
+
     if (this.invuln > 0) {
       this.invuln -= dt;
-      this.mesh.visible = Math.floor(this.invuln * 12) % 2 === 0;
-    } else {
-      this.mesh.visible = true;
+      // hit reaction: red emissive flash + quick blink (knockback-ish recoil tilt)
+      const flash = Math.floor(this.invuln * 12) % 2 === 0;
+      this._setHitFlash(flash);
+      this.mesh.visible = this.invuln > 1.0 ? (Math.floor(this.invuln * 20) % 2 === 0) : true;
+    } else if (this._wasHit) {
+      this._setHitFlash(false); this.mesh.visible = true; this._wasHit = false;
     }
+  }
+
+  // Procedural walk/swim + idle limb animation (no skeletal rig needed).
+  _animate(dt, len) {
+    const parts = this.mesh.userData.parts;
+    if (!parts) return;
+    const moving = len > 0.1;
+    this._phase = (this._phase || 0) + dt * (moving ? 12 : 3);
+    const swing = Math.sin(this._phase) * (moving ? 0.7 : 0.12);
+    // arms & legs swing in opposition (a stroke / walk cycle)
+    parts.shL.rotation.x = swing; parts.shR.rotation.x = -swing;
+    parts.hipL.rotation.x = -swing * 0.8; parts.hipR.rotation.x = swing * 0.8;
+    // gentle torso/head breathing when idle
+    if (parts.head) parts.head.rotation.z = Math.sin(this._phase * 0.5) * 0.05;
+    if (parts.torso) parts.torso.scale.y = 1 + Math.sin(this._phase * 0.5) * 0.03;
+  }
+
+  _setHitFlash(on) {
+    this._wasHit = true;
+    this.mesh.traverse((o) => {
+      if (o.isMesh && o.material && o.material.emissive) {
+        if (o.userData._baseEmissive === undefined) o.userData._baseEmissive = o.material.emissive.getHex();
+        o.material.emissive.setHex(on ? 0x660000 : o.userData._baseEmissive);
+      }
+    });
   }
 
   damage(n = 1) {

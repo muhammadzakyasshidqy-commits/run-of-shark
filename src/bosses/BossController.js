@@ -90,7 +90,9 @@ export class BossController {
   // ---- main update ----
   update(dt, player) {
     if (this.state === 'frozen' || this.state === 'defeat') return;
-    this.boss.update(dt, player.pos); // cosmetic anim (tail/bob) only, externalControl=true
+    // drive the boss's swim animation: aggressive (open jaw, fast undulation) while striking
+    this.boss.aggressionTarget = (this.state === 'charge' || this.state === 'roar' || this.state === 'wave') ? 1 : 0.4;
+    this.boss.update(dt, player.pos); // cosmetic anim only, externalControl=true
     this.timer -= dt;
 
     switch (this.state) {

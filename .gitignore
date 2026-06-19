@@ -14,3 +14,10 @@ dist
 .vite
 .cache
 coverage
+
+# test outputs
+shot-*.png
+*.tmp.json
+bt.json
+ft.json
+it.json
