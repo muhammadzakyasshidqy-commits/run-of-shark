@@ -1,0 +1,20 @@
+{
+  "name": "run-of-shark",
+  "version": "1.0.0",
+  "description": "RUN OF SHARK - colorful low-poly browser game. Dive, collect, escape the shark, reach the submarine.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name run-of-shark"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.0",
+    "vite": "^5.4.0",
+    "wrangler": "^3.78.0"
+  }
+}

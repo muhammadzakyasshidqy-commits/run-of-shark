@@ -1,0 +1,16 @@
+node_modules
+dist
+.DS_Store
+*.local
+.wrangler
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# build artifacts / logs
+*.log
+.vite
+.cache
+coverage

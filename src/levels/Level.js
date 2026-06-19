@@ -1,0 +1,227 @@
+// Level — builds a single level's content and runs its rules:
+// collect coins -> shark(s) spawn -> reach the yellow submarine to win.
+// Boss levels and the final tsunami level are handled here too.
+import * as THREE from 'three';
+import { WORLD } from '../config.js';
+import { makeCoin, makeTreasure, makeCoral, makeBoat, makeSubmarine, makeShip, makeCar, makeHazard } from '../entities/Models.js';
+import { Shark } from '../entities/Shark.js';
+import { BossController } from '../bosses/BossController.js';
+
+export class Level {
+  constructor(scene, def, economy, audio, effects) {
+    this.scene = scene;
+    this.def = def;
+    this.economy = economy;
+    this.audio = audio;
+    this.effects = effects;
+
+    this.coins = [];
+    this.corals = [];
+    this.hazards = [];        // arena hazards (boss can crash into these)
+    this.sharks = [];
+    this.collected = 0;
+    this.elapsed = 0;
+    this.state = 'collect'; // collect -> escape -> boss -> done/win/lose
+    this.boss = null;
+    this.bossCtrl = null;
+    this.onBossDefeated = () => {}; // wired by Game (runs defeat cutscene then win)
+    this.tsunamiActive = false;
+    this._sharkQueue = (def.sharks || []).map((s) => ({ ...s, spawned: false }));
+    this.speedMult = 1 + (def.id - 1) * 0.12;
+
+    this._build();
+  }
+
+  _build() {
+    // Boat at the beach (spawn point)
+    this.boat = makeBoat(0x06d6a0);
+    this.boat.position.set(6, 0.2, WORLD.beachZ + 4);
+    this.scene.add(this.boat);
+
+    // Submarine — the goal (placed deep)
+    this.submarine = makeSubmarine();
+    this.submarine.position.set((Math.random() - 0.5) * 40, 0, WORLD.size - 14);
+    this.scene.add(this.submarine);
+
+    // Ship near the goal (visual destination)
+    this.ship = makeShip();
+    this.ship.position.set(40, 0, WORLD.size - 2);
+    this.scene.add(this.ship);
+
+    // Corals (obstacles)
+    for (let i = 0; i < (this.def.corals || 0); i++) {
+      const c = makeCoral(i + this.def.id);
+      c.position.set((Math.random() - 0.5) * WORLD.size * 1.6, 0, -40 + Math.random() * (WORLD.size + 30));
+      c.rotation.y = Math.random() * Math.PI;
+      this.scene.add(c);
+      this.corals.push(c);
+    }
+
+    // Coins / treasures
+    const n = this.def.coinsToWin || 0;
+    for (let i = 0; i < n; i++) {
+      const isChest = i % 5 === 4;
+      const m = isChest ? makeTreasure() : makeCoin();
+      m.position.set((Math.random() - 0.5) * WORLD.size * 1.5, isChest ? 0.2 : 1, -30 + Math.random() * (WORLD.size + 10));
+      m.userData.value = isChest ? 5 : 1;
+      m.userData.chest = isChest;
+      this.scene.add(m);
+      this.coins.push(m);
+    }
+
+    // Boss level: spawn the goal car for final level
+    if (this.def.id === 6) {
+      this.car = makeCar(0xffd166);
+      this.car.position.copy(this.submarine.position);
+      this.car.position.y = 0.2;
+      this.submarine.visible = false;
+      this.scene.add(this.car);
+    }
+
+    // Boss arena hazards (sharp rocks) — only the bait-able hit points in the fight.
+    if (this.def.hazards) {
+      const ring = this.def.hazards;
+      for (let i = 0; i < ring; i++) {
+        const a = (i / ring) * Math.PI * 2;
+        const r = 34 + (i % 2) * 14;
+        const hz = makeHazard(i * 1.3);
+        hz.position.set(Math.cos(a) * r, 0, (WORLD.size - 40) + Math.sin(a) * r * 0.7);
+        this.scene.add(hz);
+        this.hazards.push({ mesh: hz, pos: hz.position, radius: 3.2 });
+      }
+    }
+
+    // Immediate boss spawn for boss levels
+    if (this.def.boss) {
+      this.boss = new Shark(this.scene, this.def.boss, this.speedMult);
+      if (this.def.bossHp) this.boss.setMaxHp(this.def.bossHp);
+      this.sharks.push(this.boss);
+      this.state = this.def.tsunami ? 'escape' : 'boss';
+
+      // Hazard-based boss fight (Level 5: boss, no tsunami).
+      if (!this.def.tsunami && this.hazards.length) {
+        this.boss.pos.set(0, -0.4, WORLD.size - 30);
+        this.bossCtrl = new BossController({
+          scene: this.scene, boss: this.boss, hazards: this.hazards,
+          effects: this.effects, audio: this.audio,
+        });
+        this.bossCtrl.onDefeated = () => this.onBossDefeated();
+      }
+    }
+    if (this.def.tsunami) this._startTsunami();
+  }
+
+  _startTsunami() {
+    this.tsunamiActive = true;
+    this.effects.spawnTsunami();
+    this.audio.tsunami();
+  }
+
+  _spawnShark(typeKey) {
+    const s = new Shark(this.scene, typeKey, this.speedMult);
+    s.onRoar = () => this.audio.sharkRoar();
+    s.onCharge = () => this.audio.charge();
+    this.sharks.push(s);
+    if (this.boss === null && (typeKey === 'boss' || typeKey === 'kraken')) this.boss = s;
+  }
+
+  // Returns one of: null, 'win', 'lose'
+  update(dt, player) {
+    this.elapsed += dt;
+
+    // animate goal markers
+    this.submarine.userData.ring.rotation.z += dt;
+    this.coins.forEach((c) => { if (c.userData.spin) c.rotation.z += dt * 3; c.position.y += Math.sin(this.elapsed * 3 + c.id) * 0.002; });
+
+    // queued shark spawns (after the player has been collecting a while)
+    for (const q of this._sharkQueue) {
+      if (!q.spawned && this.elapsed >= q.delay) { q.spawned = true; this._spawnShark(q.type); this.audio.sharkRoar(); }
+    }
+
+    // coin pickup + magnet
+    const pr = player.magnetRadius;
+    for (let i = this.coins.length - 1; i >= 0; i--) {
+      const c = this.coins[i];
+      const d = Math.hypot(c.position.x - player.pos.x, c.position.z - player.pos.z);
+      if (d < pr) {
+        c.position.x += (player.pos.x - c.position.x) * Math.min(1, dt * 6);
+        c.position.z += (player.pos.z - c.position.z) * Math.min(1, dt * 6);
+      }
+      if (d < 1.2) {
+        this.collected += c.userData.value;
+        this.economy.addCoins(c.userData.value);
+        c.userData.chest ? this.audio.pickup() : this.audio.coin();
+        this.effects.burst(c.position, 0xffd166, c.userData.chest ? 18 : 10);
+        this.scene.remove(c);
+        this.coins.splice(i, 1);
+      }
+    }
+
+    // transition collect -> escape once enough collected
+    if (this.state === 'collect' && this.def.coinsToWin && this.collected >= this.def.coinsToWin) {
+      this.state = 'escape';
+      // ensure at least one shark exists to chase
+      if (this.sharks.length === 0 && this._sharkQueue[0]) {
+        this._sharkQueue[0].spawned = true; this._spawnShark(this._sharkQueue[0].type); this.audio.sharkRoar();
+      }
+    }
+
+    // hazard-based boss fight drives its own boss movement, telegraphs, and damage
+    if (this.bossCtrl) this.bossCtrl.update(dt, player);
+
+    // regular sharks update + collision (the controlled boss is skipped here)
+    for (const s of this.sharks) {
+      if (this.bossCtrl && s === this.boss) continue;
+      s.update(dt, player.pos);
+      if (s.active && s.distanceTo(player.pos) < (s.isBoss ? 2.4 * s.def.scale : 1.6 * s.def.scale)) {
+        if (player.damage(1)) { this.audio.hit(); this.effects.burst(player.pos, 0xff2d2d, 14); }
+      }
+    }
+
+    if (!player.alive) { this.audio.lose(); return 'lose'; }
+
+    // tsunami catches the player
+    if (this.tsunamiActive && this.effects.tsunami && player.pos.z > this.effects.tsunami.position.z - 4) {
+      player.alive = false; this.audio.lose(); return 'lose';
+    }
+
+    // WIN conditions
+    const goal = this.car || this.submarine;
+    const goalDist = Math.hypot(goal.position.x - player.pos.x, goal.position.z - player.pos.z);
+
+    if (this.def.boss && !this.def.tsunami) {
+      // Boss is defeated ONLY when its HP reaches 0 via hazard crashes (BossController).
+      // Win is triggered through the onBossDefeated cutscene callback, not from here.
+      // No survive-timer: the player must land real hits.
+      return null;
+    }
+
+    if (this.def.tsunami) {
+      if (goalDist < 3.5) { this.audio.win(); return 'win'; }
+      return null;
+    }
+
+    // standard level: reached submarine after collecting
+    if ((this.state === 'escape') && goalDist < 4) { this.audio.win(); return 'win'; }
+    return null;
+  }
+
+  get objectiveText() {
+    if (this.def.boss && !this.def.tsunami) {
+      if (this.bossCtrl && this.bossCtrl.state === 'telegraph') return '⚠ Attack incoming — DODGE!';
+      return 'Bait the boss into the SHARP ROCKS!';
+    }
+    if (this.def.tsunami) return 'Reach the LUXURY CAR — RUN!';
+    if (this.state === 'collect') return `Collect ${this.def.coinsToWin - this.collected} more treasure`;
+    return 'Reach the YELLOW SUBMARINE!';
+  }
+
+  dispose() {
+    [...this.coins, ...this.corals].forEach((m) => this.scene.remove(m));
+    this.hazards.forEach((hz) => this.scene.remove(hz.mesh));
+    if (this.bossCtrl) this.bossCtrl.dispose();
+    this.sharks.forEach((s) => s.dispose(this.scene));
+    [this.boat, this.submarine, this.ship, this.car].forEach((m) => m && this.scene.remove(m));
+    if (this.effects.tsunami) { this.scene.remove(this.effects.tsunami); this.effects.tsunami = null; }
+  }
+}

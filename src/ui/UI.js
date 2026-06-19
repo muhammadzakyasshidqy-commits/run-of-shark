@@ -1,0 +1,456 @@
+// UI — all DOM screens: menu, levels, shop, bank, garage, inventory, settings,
+// achievements, daily reward, lucky wheel, HUD, win/lose, and the ending cinematic.
+import { LEVELS, UPGRADES, SKINS, ACCESSORIES, VEHICLES, ACHIEVEMENTS, WHEEL_PRIZES } from '../config.js';
+
+const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+
+export class UI {
+  constructor({ root, game, economy, save, audio, ads }) {
+    this.root = root; this.game = game; this.economy = economy;
+    this.save = save; this.audio = audio; this.ads = ads;
+    this.screens = {};
+    // ?debug=1 unlocks all levels in the select screen for testing ONLY.
+    // It does NOT touch saved progression — normal players still unlock in order.
+    this.debugUnlock = new URLSearchParams(location.search).get('debug') === '1';
+    this._buildHud();
+    this._buildFade();
+    economy.onChange = () => this._refreshChips();
+    economy.onAchievement = (a) => this.toast(`🏆 ${a.name} unlocked!`);
+    game.onHud = (s) => this._updateHud(s);
+    game.onWin = (i) => this._win(i);
+    game.onLose = (i) => this._lose(i);
+    game.onCine = (data) => this._cine(data);
+    this.showMenu();
+  }
+
+  // ---------- helpers ----------
+  clear() { [...this.root.querySelectorAll('.screen')].forEach((s) => s.remove()); }
+  open(builder) { this.clear(); const s = builder(); this.root.appendChild(s); return s; }
+  btn(label, cls, fn) { const b = h('button', `btn ${cls || ''}`, label); b.onclick = () => { this.audio.click(); fn(); }; return b; }
+  back(fn) { return this.btn('◀ Back', 'ghost small', fn || (() => this.showMenu())); }
+
+  toast(msg) {
+    let t = this.root.querySelector('.toast');
+    if (!t) { t = h('div', 'toast'); this.root.appendChild(t); }
+    t.textContent = msg; t.classList.add('on');
+    clearTimeout(this._toastT); this._toastT = setTimeout(() => t.classList.remove('on'), 1800);
+  }
+
+  fade(on, cb) {
+    this.fadeEl.classList.toggle('on', on);
+    if (cb) setTimeout(cb, 600);
+  }
+
+  // ---------- HUD ----------
+  _buildHud() {
+    const hud = h('div', 'hud hidden');
+    hud.innerHTML = `
+      <div class="danger"></div>
+      <div class="hud-level chip"></div>
+      <div class="hud-top">
+        <div class="chip coin-chip"><span class="ico">🪙</span><span class="hud-coins">0</span></div>
+        <div class="chip"><span class="ico">❤️</span><span class="hud-hp">3</span></div>
+      </div>
+      <div class="hud-objective"></div>
+      <div class="boss-hp-wrap hidden"><div class="boss-hp-bar"></div></div>
+      <div class="stamina-wrap"><div class="stamina-bar"></div></div>
+      <button class="btn ghost small hud-pause" style="position:absolute;top:14px;right:16px;pointer-events:auto;">⏸</button>`;
+    this.root.appendChild(hud);
+    this.hud = hud;
+    hud.querySelector('.hud-pause').onclick = () => this._pauseMenu();
+  }
+
+  _updateHud(s) {
+    this.hud.querySelector('.hud-coins').textContent = s.coins;
+    this.hud.querySelector('.hud-hp').textContent = '❤️'.repeat(0) + s.hp;
+    this.hud.querySelector('.hud-objective').textContent = s.objective;
+    this.hud.querySelector('.stamina-bar').style.width = `${s.stamina * 100}%`;
+    this.hud.querySelector('.danger').classList.toggle('on', !!s.danger);
+    const bw = this.hud.querySelector('.boss-hp-wrap');
+    bw.classList.toggle('hidden', s.boss == null);
+    if (s.boss != null) this.hud.querySelector('.boss-hp-bar').style.width = `${Math.max(0, s.boss) * 100}%`;
+  }
+
+  // Cinematic banner for boss intro / defeat (driven by Game.onCine).
+  _cine(data) {
+    if (!this._cineEl) {
+      this._cineEl = h('div', 'cine-banner');
+      Object.assign(this._cineEl.style, {
+        position: 'absolute', top: '34%', left: '0', right: '0', textAlign: 'center',
+        pointerEvents: 'none', zIndex: 50,
+      });
+      this.root.appendChild(this._cineEl);
+    }
+    if (!data) { this._cineEl.style.display = 'none'; return; }
+    this._cineEl.style.display = 'block';
+    this._cineEl.innerHTML =
+      `<div class="title" style="font-size:clamp(30px,9vw,58px)">${data.title}</div>` +
+      (data.sub ? `<div class="subtitle">${data.sub}</div>` : '');
+  }
+
+  _buildFade() { this.fadeEl = h('div', 'fade'); this.root.appendChild(this.fadeEl); }
+  _refreshChips() { const c = this.hud.querySelector('.hud-coins'); if (c) c.textContent = this.economy.s.coins; }
+
+  showHud(on) { this.hud.classList.toggle('hidden', !on); }
+
+  // ---------- MENU ----------
+  showMenu() {
+    this.game.running = false; this.showHud(false);
+    this._checkDaily();
+    this.open(() => {
+      const s = h('div', 'screen');
+      const card = h('div', 'card');
+      card.appendChild(h('div', 'title', 'RUN OF <span class="accent">SHARK</span>'));
+      card.appendChild(h('div', 'subtitle', 'Dive • Collect • Escape the shark • Reach the submarine'));
+      const wallet = h('div', 'row');
+      wallet.appendChild(h('div', 'chip coin-chip', `🪙 ${this.economy.s.coins}`));
+      wallet.appendChild(h('div', 'chip', `💵 ${this.economy.s.cash}`));
+      wallet.appendChild(h('div', 'chip', `💎 ${this.economy.s.gems}`));
+      card.appendChild(wallet);
+      const row1 = h('div', 'row');
+      row1.appendChild(this.btn('▶ PLAY', 'green', () => this.showLevels()));
+      card.appendChild(row1);
+      const grid = h('div', 'row');
+      [['🛒 Shop', () => this.showShop()], ['🏦 Bank', () => this.showBank()], ['🚗 Garage', () => this.showGarage()],
+       ['🎽 Skins', () => this.showInventory()], ['🏆 Awards', () => this.showAchievements()], ['🎁 Daily', () => this.showDaily()],
+       ['🎡 Wheel', () => this.showWheel()], ['⚙️ Settings', () => this.showSettings()]].forEach(([l, f]) =>
+        grid.appendChild(this.btn(l, 'small', f)));
+      card.appendChild(grid);
+      s.appendChild(card);
+      return s;
+    });
+  }
+
+  // ---------- LEVELS ----------
+  showLevels() {
+    this.open(() => {
+      const s = h('div', 'screen'); const card = h('div', 'card');
+      card.appendChild(h('h2', 'head', 'Select Level'));
+      const list = h('div', 'list');
+      LEVELS.forEach((lv, i) => {
+        const unlocked = this.debugUnlock || this.save.data.highestLevel >= lv.id;
+        const it = h('div', 'item');
+        const lock = unlocked ? (this.debugUnlock && this.save.data.highestLevel < lv.id ? '🔓debug ' : '') + lv.objective : '🔒 Locked';
+        it.appendChild(h('div', null, `<div class="name">${lv.id}. ${lv.name}${lv.boss ? ' 👑' : ''}</div><div class="lvl">${lock}</div>`));
+        if (unlocked) it.appendChild(this.btn('Play', 'green small', () => this.startLevel(i)));
+        list.appendChild(it);
+      });
+      card.appendChild(list);
+      card.appendChild(this.back());
+      s.appendChild(card); return s;
+    });
+  }
+
+  startLevel(i) {
+    this.clear(); this.showHud(true);
+    this.hud.querySelector('.hud-level').textContent = `LVL ${LEVELS[i].id}`;
+    this.audio.unlock();
+    this.fade(true, () => { this.game.startLevel(i); this.fade(false); });
+  }
+
+  _pauseMenu() {
+    this.game.pause(true);
+    this.open(() => {
+      const s = h('div', 'screen'); const card = h('div', 'card');
+      card.appendChild(h('h2', 'head', 'Paused'));
+      card.appendChild(this.btn('▶ Resume', 'green', () => { this.clear(); this.game.pause(false); }));
+      card.appendChild(h('div', 'row', ''));
+      const r = h('div', 'row');
+      r.appendChild(this.btn('Restart', 'small', () => { this.clear(); this.game.pause(false); this.startLevel(this.game.levelIndex); }));
+      r.appendChild(this.btn('Quit', 'small ghost', () => { this.game.disposeLevel(); this.game.pause(false); this.showMenu(); }));
+      card.appendChild(r);
+      s.appendChild(card); return s;
+    });
+  }
+
+  // ---------- WIN / LOSE ----------
+  _win(i) {
+    const lv = LEVELS[i];
+    const reward = 50 + i * 40;
+    this.economy.addCoins(reward);
+    const sd = this.save.data;
+    sd.levelsCleared = Math.max(sd.levelsCleared, lv.id);
+    if (lv.boss) sd.bossesBeaten += 1;
+    sd.highestLevel = Math.max(sd.highestLevel, Math.min(lv.id + 1, LEVELS.length));
+    this.save.markDirty();
+    this.ads.interstitial();
+
+    if (i === LEVELS.length - 1) return this._ending();
+
+    this.showHud(false);
+    this.open(() => {
+      const s = h('div', 'screen'); const card = h('div', 'card');
+      card.appendChild(h('div', 'title', 'ESCAPED!'));
+      card.appendChild(h('div', 'subtitle', `Level ${lv.id} complete — +${reward} 🪙`));
+      const r = h('div', 'row');
+      r.appendChild(this.btn('Next ▶', 'green', () => this.startLevel(Math.min(i + 1, LEVELS.length - 1))));
+      r.appendChild(this.btn('Shop', 'small', () => this.showShop()));
+      r.appendChild(this.btn('Menu', 'small ghost', () => this.showMenu()));
+      card.appendChild(r);
+      // reward ad
+      card.appendChild(h('div', 'row', ''));
+      card.appendChild(this.btn('📺 Watch Ad → 2x Coins', 'gold small', async () => {
+        if (await this.ads.rewarded()) { this.economy.addCoins(reward); this.toast(`+${reward} bonus coins!`); }
+      }));
+      s.appendChild(card); return s;
+    });
+  }
+
+  _lose(i) {
+    this.showHud(false);
+    this.open(() => {
+      const s = h('div', 'screen'); const card = h('div', 'card');
+      card.appendChild(h('div', 'title', '<span class="accent">CAUGHT!</span>'));
+      card.appendChild(h('div', 'subtitle', 'The shark got you...'));
+      const r = h('div', 'row');
+      r.appendChild(this.btn('Retry', 'green', () => this.startLevel(i)));
+      r.appendChild(this.btn('Menu', 'small ghost', () => this.showMenu()));
+      card.appendChild(r);
+      card.appendChild(h('div', 'row', ''));
+      card.appendChild(this.btn('📺 Watch Ad → Revive', 'gold small', async () => {
+        if (await this.ads.rewarded()) { this.clear(); this.showHud(true); this.game.startLevel(i); }
+      }));
+      s.appendChild(card); return s;
+    });
+  }
+
+  // ---------- ENDING CINEMATIC ----------
+  _ending() {
+    this.showHud(false);
+    const lines = [
+      'The tsunami swallows the island...',
+      'You floor the luxury car up the cliff road.',
+      'The wave roars behind you — closer, closer...',
+      'You make it to the summit. Safe.',
+      'RUN OF SHARK — Complete.',
+    ];
+    this.audio.tsunami();
+    let idx = 0;
+    const s = h('div', 'screen'); s.style.background = 'linear-gradient(180deg,#06324a,#04263d)';
+    const txt = h('div', 'cine-text'); s.appendChild(txt);
+    this.clear(); this.root.appendChild(s);
+    const tick = () => {
+      if (idx < lines.length) { txt.textContent = lines[idx++]; this.audio.click(); setTimeout(tick, 2200); }
+      else this._credits(s);
+    };
+    tick();
+  }
+
+  _credits(s) {
+    s.innerHTML = '';
+    const card = h('div', 'card');
+    card.appendChild(h('div', 'title', 'THE END'));
+    card.appendChild(h('div', 'subtitle', 'Thanks for playing RUN OF SHARK!<br>Lead Developer: You'));
+    card.appendChild(this.btn('Back to Menu', 'green', () => this.showMenu()));
+    s.appendChild(card);
+  }
+
+  // ---------- SHOP ----------
+  showShop(tab = 'upgrades') {
+    this.open(() => {
+      const s = h('div', 'screen'); const card = h('div', 'card');
+      card.appendChild(h('h2', 'head', '🛒 Shop'));
+      const tabs = h('div', 'row');
+      [['upgrades', 'Upgrades'], ['skins', 'Skins'], ['accessories', 'Accessories'], ['vehicles', 'Vehicles']].forEach(([k, l]) =>
+        tabs.appendChild(this.btn(l, `small ${tab === k ? 'green' : 'ghost'}`, () => this.showShop(k))));
+      card.appendChild(tabs);
+      const list = h('div', 'list');
+      if (tab === 'upgrades') this._upgradeList(list);
+      else if (tab === 'skins') this._cosmeticList(list, SKINS, 'skin');
+      else if (tab === 'accessories') this._cosmeticList(list, ACCESSORIES, 'accessory');
+      else this._cosmeticList(list, VEHICLES, 'vehicle');
+      card.appendChild(list);
+      card.appendChild(h('div', 'chip coin-chip', `🪙 ${this.economy.s.coins}`));
+      card.appendChild(this.back());
+      s.appendChild(card); return s;
+    });
+  }
+
+  _upgradeList(list) {
+    Object.entries(UPGRADES).forEach(([key, def]) => {
+      const lvl = this.economy.s.upgrades[key] || 0;
+      const it = h('div', 'item');
+      it.appendChild(h('div', null, `<div class="name">${def.icon} ${def.name}</div><div class="lvl">Lv ${lvl}/${def.max} → ${this.economy.statValue(key).toFixed(1)}</div>`));
+      if (lvl >= def.max) it.appendChild(h('div', 'lvl', 'MAX'));
+      else it.appendChild(this.btn(`🪙 ${this.economy.upgradeCost(key)}`, 'gold small', () => {
+        if (this.economy.buyUpgrade(key)) this.showShop('upgrades'); else this.toast('Not enough coins');
+      }));
+      list.appendChild(it);
+    });
+  }
+
+  _cosmeticList(list, items, kind) {
+    const owned = kind === 'skin' ? this.economy.s.ownedSkins : kind === 'accessory' ? this.economy.s.ownedAccessories : this.economy.s.ownedVehicles;
+    const equipped = kind === 'skin' ? this.economy.s.equippedSkin : kind === 'accessory' ? this.economy.s.equippedAccessory : null;
+    items.forEach((x) => {
+      const have = owned.includes(x.id);
+      const it = h('div', 'item');
+      it.appendChild(h('div', null, `<div class="name">${x.name}</div><div class="lvl">${have ? 'Owned' : '🪙 ' + x.cost}</div>`));
+      if (!have) {
+        it.appendChild(this.btn('Buy', 'gold small', () => {
+          const ok = kind === 'skin' ? this.economy.buySkin(x.id) : kind === 'accessory' ? this.economy.buyAccessory(x.id) : this.economy.buyVehicle(x.id);
+          if (ok) this.showShop(kind === 'skin' ? 'skins' : kind === 'accessory' ? 'accessories' : 'vehicles'); else this.toast('Not enough coins');
+        }));
+      } else if (kind === 'skin') {
+        it.appendChild(this.btn(equipped === x.id ? '✓ Equipped' : 'Equip', `small ${equipped === x.id ? 'green' : ''}`, () => {
+          this.economy.s.equippedSkin = x.id; this.save.markDirty(); this.showShop('skins');
+        }));
+      } else if (kind === 'accessory') {
+        it.appendChild(this.btn(equipped === x.id ? '✓' : 'Equip', `small ${equipped === x.id ? 'green' : ''}`, () => {
+          this.economy.s.equippedAccessory = equipped === x.id ? null : x.id; this.save.markDirty(); this.showShop('accessories');
+        }));
+      } else it.appendChild(h('div', 'lvl', '✓'));
+      list.appendChild(it);
+    });
+  }
+
+  // ---------- BANK ----------
+  showBank() {
+    this.open(() => {
+      const s = h('div', 'screen'); const card = h('div', 'card');
+      const e = this.economy;
+      card.appendChild(h('h2', 'head', '🏦 Bank'));
+      card.appendChild(h('div', 'subtitle', `Vault: ${e.s.bank} / ${e.bankCapacity}  •  Cash: ${e.s.cash}`));
+      card.appendChild(h('div', 'muted', 'Convert level coins into cash, then keep it safe in the bank.'));
+      const r0 = h('div', 'row');
+      r0.appendChild(this.btn('Convert 100🪙→10💵', 'small', () => { const c = e.convertCoinsToCash(100); this.toast(c ? `+${c} cash` : 'Need 10+ coins'); this.showBank(); }));
+      card.appendChild(r0);
+      const r1 = h('div', 'row');
+      r1.appendChild(this.btn('Deposit 50', 'green small', () => { e.deposit(50); this.showBank(); }));
+      r1.appendChild(this.btn('Deposit All', 'green small', () => { e.deposit(e.s.cash); this.showBank(); }));
+      r1.appendChild(this.btn('Withdraw 50', 'small', () => { e.withdraw(50); this.showBank(); }));
+      card.appendChild(r1);
+      const r2 = h('div', 'row');
+      if (e.s.bankLevel < 6) r2.appendChild(this.btn(`Upgrade Capacity (💵 ${e.bankUpgradeCost()})`, 'gold small', () => { if (e.upgradeBank()) this.showBank(); else this.toast('Not enough cash'); }));
+      else r2.appendChild(h('div', 'muted', 'Bank fully upgraded'));
+      card.appendChild(r2);
+      card.appendChild(this.back());
+      s.appendChild(card); return s;
+    });
+  }
+
+  // ---------- GARAGE ----------
+  showGarage() {
+    this.open(() => {
+      const s = h('div', 'screen'); const card = h('div', 'card');
+      card.appendChild(h('h2', 'head', '🚗 Garage'));
+      card.appendChild(h('div', 'muted', 'Vehicles used in the final escape chapters.'));
+      const list = h('div', 'list'); this._cosmeticList(list, VEHICLES, 'vehicle');
+      card.appendChild(list); card.appendChild(this.back());
+      s.appendChild(card); return s;
+    });
+  }
+
+  // ---------- INVENTORY / SKINS ----------
+  showInventory() { this.showShop('skins'); }
+
+  // ---------- ACHIEVEMENTS ----------
+  showAchievements() {
+    this.open(() => {
+      const s = h('div', 'screen'); const card = h('div', 'card');
+      card.appendChild(h('h2', 'head', '🏆 Achievements'));
+      const list = h('div', 'list');
+      ACHIEVEMENTS.forEach((a) => {
+        const got = this.save.data.achievements.includes(a.id);
+        const it = h('div', 'item');
+        it.appendChild(h('div', 'name', `${got ? '✅' : '🔒'} ${a.name}`));
+        list.appendChild(it);
+      });
+      card.appendChild(list); card.appendChild(this.back());
+      s.appendChild(card); return s;
+    });
+  }
+
+  // ---------- DAILY ----------
+  _checkDaily() {
+    const sd = this.save.data;
+    const today = new Date().toDateString();
+    if (sd._lastDailyStr !== today) sd._dailyAvailable = true;
+  }
+  showDaily() {
+    this.open(() => {
+      const s = h('div', 'screen'); const card = h('div', 'card');
+      const sd = this.save.data;
+      const today = new Date().toDateString();
+      const available = sd._lastDailyStr !== today;
+      card.appendChild(h('h2', 'head', '🎁 Daily Reward'));
+      card.appendChild(h('div', 'subtitle', `Streak: ${sd.dailyStreak} day(s)`));
+      if (available) {
+        card.appendChild(this.btn('Claim Reward', 'green', () => {
+          const reward = 50 + sd.dailyStreak * 25;
+          this.economy.addCoins(reward);
+          if (sd.dailyStreak % 5 === 4) this.economy.addGems(1);
+          sd.dailyStreak += 1; sd._lastDailyStr = today; this.save.markDirty();
+          this.toast(`+${reward} coins!`); this.showDaily();
+        }));
+      } else card.appendChild(h('div', 'muted', 'Come back tomorrow for more!'));
+      card.appendChild(h('div', 'row', '')); card.appendChild(this.back());
+      s.appendChild(card); return s;
+    });
+  }
+
+  // ---------- LUCKY WHEEL ----------
+  showWheel() {
+    this.open(() => {
+      const s = h('div', 'screen'); const card = h('div', 'card');
+      card.appendChild(h('h2', 'head', '🎡 Lucky Wheel'));
+      card.appendChild(h('div', 'subtitle', 'Spin for coins, cash, or gems!'));
+      const result = h('div', 'subtitle', '&nbsp;');
+      card.appendChild(this.btn('Spin (💎 1)', 'gold', () => {
+        if (!this.economy.spendGems(1)) return this.toast('Need 1 gem (get gems from daily/wheel)');
+        const prize = WHEEL_PRIZES[Math.floor(Math.random() * WHEEL_PRIZES.length)];
+        prize.apply(this.economy); result.textContent = `🎉 ${prize.label}`;
+      }));
+      card.appendChild(this.btn('Free Spin (📺 Ad)', 'small', async () => {
+        if (await this.ads.rewarded()) {
+          const prize = WHEEL_PRIZES[Math.floor(Math.random() * WHEEL_PRIZES.length)];
+          prize.apply(this.economy); result.textContent = `🎉 ${prize.label}`;
+        }
+      }));
+      card.appendChild(result); card.appendChild(this.back());
+      s.appendChild(card); return s;
+    });
+  }
+
+  // ---------- SETTINGS ----------
+  showSettings() {
+    this.open(() => {
+      const s = h('div', 'screen'); const card = h('div', 'card');
+      const set = this.save.data.settings;
+      card.appendChild(h('h2', 'head', '⚙️ Settings'));
+      const mk = (label, key, after) => {
+        const it = h('div', 'item');
+        it.appendChild(h('div', 'name', label));
+        it.appendChild(this.btn(set[key] ? 'ON' : 'OFF', `small ${set[key] ? 'green' : 'ghost'}`, () => { set[key] = !set[key]; this.save.markDirty(); after && after(); this.showSettings(); }));
+        return it;
+      };
+      const list = h('div', 'list');
+      list.appendChild(mk('🎵 Music', 'music', () => set.music ? this.audio.startMusic() : this.audio.stopMusic()));
+      list.appendChild(mk('🔊 Sound FX', 'sfx'));
+
+      // Joystick sensitivity (low / medium / high)
+      const SENS = { Low: 0.6, Medium: 1.0, High: 1.5 };
+      if (set.joySensitivity == null) set.joySensitivity = 1;
+      const sensRow = h('div', 'item');
+      sensRow.appendChild(h('div', 'name', '🕹️ Joystick Sensitivity'));
+      const sensBtns = h('div', 'row');
+      Object.entries(SENS).forEach(([label, val]) => {
+        const active = Math.abs(set.joySensitivity - val) < 0.01;
+        sensBtns.appendChild(this.btn(label, `small ${active ? 'green' : 'ghost'}`, () => {
+          set.joySensitivity = val; this.save.markDirty(); this.showSettings();
+        }));
+      });
+      sensRow.appendChild(sensBtns);
+      list.appendChild(sensRow);
+
+      // Invert Y toggle
+      list.appendChild(mk('↕️ Invert Y Axis', 'invertY'));
+      card.appendChild(list);
+      card.appendChild(h('div', 'muted', `Player: ${this.save.data.player.name} (Guest)`));
+      card.appendChild(h('div', 'row', ''));
+      card.appendChild(this.btn('Reset Progress', 'ghost small', () => { if (confirm('Erase all progress?')) { this.save.reset(); location.reload(); } }));
+      card.appendChild(this.back());
+      s.appendChild(card); return s;
+    });
+  }
+}
