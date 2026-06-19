@@ -1,6 +1,7 @@
 // Pure-logic unit tests (no browser): daily streak rules + save merge.
 import { claimDaily, dailyStatus, dailyReward } from './src/economy/daily.js';
 import { mergeSaves } from './src/save/SaveManager.js';
+import { rotateInput } from './src/systems/cameraRelative.js';
 
 let pass = 0, fail = 0;
 const eq = (name, got, want) => {
@@ -40,6 +41,19 @@ eq('merge takes max level', m.highestLevel, 5);
 eq('merge unions skins', m.ownedSkins.sort(), ['blue', 'green', 'pirate']);
 eq('merge max upgrade speed', m.upgrades.speed, 2);
 eq('merge max upgrade luck', m.upgrades.luck, 3);
+
+// --- CAMERA-RELATIVE rotation layer (independent of Input core) ---
+const r2 = (o) => [+o.x.toFixed(3), +o.z.toFixed(3)];
+// yaw 0 == identity (so classic mapping + input-test stay valid)
+eq('camrel yaw0 identity (fwd)', r2(rotateInput(0, 1, 0)), [0, 1]);
+eq('camrel yaw0 identity (right)', r2(rotateInput(-1, 0, 0)), [-1, 0]);
+// yaw 90deg: forward(0,1) -> +X ; right intent rotates accordingly
+eq('camrel yaw90 forward->+X', r2(rotateInput(0, 1, Math.PI / 2)), [1, 0]);
+eq('camrel yaw90 (1,0)->(0,-1)', r2(rotateInput(1, 0, Math.PI / 2)), [0, -1]);
+// yaw 180deg: forward flips to -Z
+eq('camrel yaw180 forward->-Z', r2(rotateInput(0, 1, Math.PI)), [0, -1]);
+// magnitude preserved
+const rm = rotateInput(0.6, -0.4, 1.0); eq('camrel preserves length', +Math.hypot(rm.x, rm.z).toFixed(3), +Math.hypot(0.6, -0.4).toFixed(3));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

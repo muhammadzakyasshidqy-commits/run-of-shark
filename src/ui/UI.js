@@ -462,8 +462,35 @@ export class UI {
       sensRow.appendChild(sensBtns);
       list.appendChild(sensRow);
 
-      // Invert Y toggle
-      list.appendChild(mk('↕️ Invert Y Axis', 'invertY'));
+      // Invert Y toggle (movement)
+      list.appendChild(mk('↕️ Invert Y Axis (move)', 'invertY'));
+
+      // --- Camera controls ---
+      if (set.camMode == null) set.camMode = 'camera';
+      const modeRow = h('div', 'item');
+      modeRow.appendChild(h('div', null, `<div class="name">🎥 Control Mode</div><div class="lvl">${set.camMode === 'camera' ? 'Camera-Relative (Roblox-style)' : 'Classic (world-fixed)'}</div>`));
+      modeRow.appendChild(this.btn(set.camMode === 'camera' ? 'Camera' : 'Classic', `small ${set.camMode === 'camera' ? 'green' : 'ghost'}`, () => {
+        set.camMode = set.camMode === 'camera' ? 'classic' : 'camera'; this.save.markDirty(); this.showSettings();
+      }));
+      list.appendChild(modeRow);
+
+      // Camera (look) sensitivity
+      const CSENS = { Low: 0.6, Medium: 1.0, High: 1.6 };
+      if (set.camSensitivity == null) set.camSensitivity = 1;
+      const csRow = h('div', 'item');
+      csRow.appendChild(h('div', 'name', '🎥 Camera Sensitivity'));
+      const csBtns = h('div', 'row');
+      Object.entries(CSENS).forEach(([label, val]) => {
+        const active = Math.abs(set.camSensitivity - val) < 0.01;
+        csBtns.appendChild(this.btn(label, `small ${active ? 'green' : 'ghost'}`, () => {
+          set.camSensitivity = val; this.save.markDirty(); this.showSettings();
+        }));
+      });
+      csRow.appendChild(csBtns);
+      list.appendChild(csRow);
+
+      // Invert camera Y (look) — separate from movement invertY
+      list.appendChild(mk('↕️ Invert Camera Y (look)', 'camInvertY'));
       card.appendChild(list);
 
       // Cloud login (guest by default). Magic-link flow; local save stays the fallback.

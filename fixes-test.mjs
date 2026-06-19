@@ -44,8 +44,10 @@ const cam = await p.evaluate(() => {
   const res = {}; const camPositions = {};
   for (const [name, yaw] of Object.entries(headings)) {
     p.mesh.rotation.y = yaw; g.camYaw = yaw - 0.6; // start slightly off so we test convergence
+    g._dragging = false; g._dragCooldown = 0;
     p.pos.set(0, 0.2, 0);
-    for (let i = 0; i < 180; i++) { p.mesh.rotation.y = yaw; g._chaseCamera(1 / 60, true); }
+    const mv = { x: Math.sin(yaw), z: Math.cos(yaw), len: 1 }; // move along the heading
+    for (let i = 0; i < 180; i++) { p.mesh.rotation.y = yaw; g._updateCamera(1 / 60, mv); }
     const cp = g.camera.position; const fwd = [Math.sin(yaw), Math.cos(yaw)];
     // vector from camera to player (should align with the heading forward = "behind")
     const bx = p.pos.x - cp.x, bz = p.pos.z - cp.z, bl = Math.hypot(bx, bz);
