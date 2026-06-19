@@ -58,11 +58,31 @@ export class SaveManager {
   }
 
   save() {
+    // localStorage is ALWAYS written first and is the source of truth. The cloud push
+    // is best-effort: if it rejects (offline / not signed in / not configured) we swallow
+    // it so a cloud failure can never lose local progress.
     try {
       localStorage.setItem(KEY, JSON.stringify(this.data));
-      if (this.cloud?.push) this.cloud.push(this.data).catch(() => {});
     } catch (e) {
-      console.warn('Save write failed', e);
+      console.warn('Local save write failed', e);
+    }
+    if (this.cloud?.push) {
+      Promise.resolve().then(() => this.cloud.push(this.data)).catch(() => { /* fallback: local only */ });
+    }
+  }
+
+  // Pull a cloud save and merge it with local, keeping whichever is further along.
+  // On ANY failure (no provider, not configured, offline, not authed) local is untouched.
+  async syncFromCloud() {
+    if (!this.cloud?.pull) return { ok: false, reason: 'no_provider' };
+    try {
+      const remote = await this.cloud.pull();
+      if (!remote) return { ok: false, reason: 'no_remote_data' };
+      this.data = mergeSaves(this.data, remote);
+      this.save();
+      return { ok: true, merged: true };
+    } catch (e) {
+      return { ok: false, reason: 'pull_failed', error: String(e?.message || e) };
     }
   }
 
@@ -70,4 +90,18 @@ export class SaveManager {
     this.data = structuredClone(DEFAULT_SAVE);
     this.save();
   }
+}
+
+// Merge two saves, preferring the more-advanced values. Never drops progress from
+// either side (owned items are unioned; progression takes the max).
+export function mergeSaves(local, remote) {
+  const out = { ...structuredClone(DEFAULT_SAVE), ...local };
+  const maxNum = (k) => { out[k] = Math.max(local?.[k] || 0, remote?.[k] || 0); };
+  ['coins', 'cash', 'gems', 'bank', 'bankLevel', 'highestLevel', 'levelsCleared', 'bossesBeaten', 'totalCoins', 'dailyStreak'].forEach(maxNum);
+  const union = (k) => { out[k] = Array.from(new Set([...(local?.[k] || []), ...(remote?.[k] || [])])); };
+  ['ownedSkins', 'ownedAccessories', 'ownedVehicles', 'achievements'].forEach(union);
+  // per-stat upgrades: take the higher level of each
+  out.upgrades = { ...out.upgrades };
+  for (const key of Object.keys(out.upgrades)) out.upgrades[key] = Math.max(local?.upgrades?.[key] || 0, remote?.upgrades?.[key] || 0);
+  return out;
 }

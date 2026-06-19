@@ -1,13 +1,14 @@
 // UI — all DOM screens: menu, levels, shop, bank, garage, inventory, settings,
 // achievements, daily reward, lucky wheel, HUD, win/lose, and the ending cinematic.
 import { LEVELS, UPGRADES, SKINS, ACCESSORIES, VEHICLES, ACHIEVEMENTS, WHEEL_PRIZES } from '../config.js';
+import { dailyStatus, claimDaily } from '../economy/daily.js';
 
 const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 
 export class UI {
-  constructor({ root, game, economy, save, audio, ads }) {
+  constructor({ root, game, economy, save, audio, ads, cloud }) {
     this.root = root; this.game = game; this.economy = economy;
-    this.save = save; this.audio = audio; this.ads = ads;
+    this.save = save; this.audio = audio; this.ads = ads; this.cloud = cloud;
     this.screens = {};
     // ?debug=1 unlocks all levels in the select screen for testing ONLY.
     // It does NOT touch saved progression — normal players still unlock in order.
@@ -363,25 +364,25 @@ export class UI {
 
   // ---------- DAILY ----------
   _checkDaily() {
-    const sd = this.save.data;
-    const today = new Date().toDateString();
-    if (sd._lastDailyStr !== today) sd._dailyAvailable = true;
+    const st = dailyStatus(this.save.data);
+    this.save.data._dailyAvailable = st.available;
   }
   showDaily() {
     this.open(() => {
       const s = h('div', 'screen'); const card = h('div', 'card');
       const sd = this.save.data;
-      const today = new Date().toDateString();
-      const available = sd._lastDailyStr !== today;
+      const st = dailyStatus(sd);
       card.appendChild(h('h2', 'head', '🎁 Daily Reward'));
-      card.appendChild(h('div', 'subtitle', `Streak: ${sd.dailyStreak} day(s)`));
-      if (available) {
+      card.appendChild(h('div', 'subtitle', `Streak: ${sd.dailyStreak || 0} day(s)`));
+      if (st.available) {
         card.appendChild(this.btn('Claim Reward', 'green', () => {
-          const reward = 50 + sd.dailyStreak * 25;
-          this.economy.addCoins(reward);
-          if (sd.dailyStreak % 5 === 4) this.economy.addGems(1);
-          sd.dailyStreak += 1; sd._lastDailyStr = today; this.save.markDirty();
-          this.toast(`+${reward} coins!`); this.showDaily();
+          const res = claimDaily(sd);            // real interval check + streak reset
+          if (!res.ok) return this.showDaily();
+          this.economy.addCoins(res.reward);
+          if (res.gems) this.economy.addGems(res.gems);
+          this.save.markDirty();
+          this.toast(`+${res.reward} coins${res.gems ? ` +${res.gems}💎` : ''} (streak ${res.streak})`);
+          this.showDaily();
         }));
       } else card.appendChild(h('div', 'muted', 'Come back tomorrow for more!'));
       card.appendChild(h('div', 'row', '')); card.appendChild(this.back());
@@ -410,6 +411,20 @@ export class UI {
       card.appendChild(result); card.appendChild(this.back());
       s.appendChild(card); return s;
     });
+  }
+
+  // Email magic-link login. Failures are non-fatal — guest/local save continues.
+  async _loginPrompt() {
+    const email = prompt('Enter your email for a magic login link:');
+    if (!email) return;
+    this.toast('Sending login link...');
+    try {
+      await this.cloud.signIn(email.trim());
+      this.toast('Check your email for the login link!');
+    } catch (e) {
+      this.toast('Login unavailable — staying on local save');
+      console.warn('Cloud login failed (local save unaffected):', e);
+    }
   }
 
   // ---------- SETTINGS ----------
@@ -446,7 +461,18 @@ export class UI {
       // Invert Y toggle
       list.appendChild(mk('↕️ Invert Y Axis', 'invertY'));
       card.appendChild(list);
-      card.appendChild(h('div', 'muted', `Player: ${this.save.data.player.name} (Guest)`));
+
+      // Cloud login (guest by default). Magic-link flow; local save stays the fallback.
+      const acct = h('div', 'item');
+      const configured = this.cloud && this.cloud.isConfigured();
+      acct.appendChild(h('div', null, `<div class="name">☁️ Account</div><div class="lvl">${this.save.data.player.guest ? 'Guest (local save)' : this.save.data.player.name}</div>`));
+      acct.appendChild(this.btn(configured ? 'Login' : 'Cloud off', `small ${configured ? '' : 'ghost'}`, () => {
+        if (!configured) return this.toast('Cloud save not configured (see README)');
+        this._loginPrompt();
+      }));
+      card.appendChild(acct);
+
+      card.appendChild(h('div', 'muted', `Player: ${this.save.data.player.name} (${this.save.data.player.guest ? 'Guest' : 'Cloud'})`));
       card.appendChild(h('div', 'row', ''));
       card.appendChild(this.btn('Reset Progress', 'ghost small', () => { if (confirm('Erase all progress?')) { this.save.reset(); location.reload(); } }));
       card.appendChild(this.back());

@@ -17,8 +17,11 @@ export class Level {
 
     this.coins = [];
     this.corals = [];
+    this.barriers = [];       // visual wall meshes for split routes
+    this.solids = [];         // collision shapes blocking the player: {type:'circle'|'box', ...}
     this.hazards = [];        // arena hazards (boss can crash into these)
     this.sharks = [];
+    this.playerRadius = 0.5;
     this.collected = 0;
     this.elapsed = 0;
     this.state = 'collect'; // collect -> escape -> boss -> done/win/lose
@@ -38,9 +41,10 @@ export class Level {
     this.boat.position.set(6, 0.2, WORLD.beachZ + 4);
     this.scene.add(this.boat);
 
-    // Submarine — the goal (placed deep)
+    // Submarine — the goal (placed deep). Split-route levels center it so both lanes converge.
     this.submarine = makeSubmarine();
-    this.submarine.position.set((Math.random() - 0.5) * 40, 0, WORLD.size - 14);
+    const subX = this.def.splitRoute ? 0 : (Math.random() - 0.5) * 40;
+    this.submarine.position.set(subX, 0, WORLD.size - 14);
     this.scene.add(this.submarine);
 
     // Ship near the goal (visual destination)
@@ -48,13 +52,34 @@ export class Level {
     this.ship.position.set(40, 0, WORLD.size - 2);
     this.scene.add(this.ship);
 
-    // Corals (obstacles)
-    for (let i = 0; i < (this.def.corals || 0); i++) {
+    // Split-route divider walls (solid, blocking) + per-lane bias
+    if (this.def.barriers) {
+      for (const b of this.def.barriers) {
+        const wall = new THREE.Mesh(
+          new THREE.BoxGeometry(b.hx * 2, 3.2, b.hz * 2),
+          new THREE.MeshStandardMaterial({ color: 0x3b4a59, flatShading: true, roughness: 1 })
+        );
+        wall.position.set(b.x, 1, b.z);
+        wall.castShadow = true; wall.receiveShadow = true;
+        this.scene.add(wall);
+        this.barriers.push(wall);
+        this.solids.push({ type: 'box', pos: { x: b.x, z: b.z }, hx: b.hx, hz: b.hz });
+      }
+    }
+
+    // Corals (obstacles) — now SOLID. Collision radius (0.75) matches the visual footprint.
+    const coralCount = this.def.corals || 0;
+    for (let i = 0; i < coralCount; i++) {
       const c = makeCoral(i + this.def.id);
-      c.position.set((Math.random() - 0.5) * WORLD.size * 1.6, 0, -40 + Math.random() * (WORLD.size + 30));
+      // On split-route levels push corals into the RIGHT lane (the "slow but safe" path).
+      const x = this.def.splitRoute
+        ? 6 + Math.random() * (WORLD.size * 0.8)
+        : (Math.random() - 0.5) * WORLD.size * 1.6;
+      c.position.set(x, 0, -40 + Math.random() * (WORLD.size + 30));
       c.rotation.y = Math.random() * Math.PI;
       this.scene.add(c);
       this.corals.push(c);
+      this.solids.push({ type: 'circle', pos: c.position, r: 0.75 });
     }
 
     // Coins / treasures
@@ -121,13 +146,56 @@ export class Level {
     const s = new Shark(this.scene, typeKey, this.speedMult);
     s.onRoar = () => this.audio.sharkRoar();
     s.onCharge = () => this.audio.charge();
+    // Split-route bias: the first shark patrols the LEFT lane, making it the risky/fast path.
+    if (this.def.splitRoute && this.sharks.filter((x) => !x.isBoss).length === 0) {
+      s.pos.set(-WORLD.size * 0.35, -0.4, WORLD.size - 20);
+    }
     this.sharks.push(s);
     if (this.boss === null && (typeKey === 'boss' || typeKey === 'kraken')) this.boss = s;
+  }
+
+  // Solid-body collision: keep the player out of corals (circles) and walls (boxes).
+  // Effect = SOLID BLOCKING (no pass-through). Chosen over damage/stagger because corals
+  // are static terrain; blocking gives predictable, fair routing without stacking punishment
+  // on top of the shark chase. Resolves by pushing the player to the obstacle's surface.
+  resolveCollisions(player) {
+    const pr = this.playerRadius;
+    for (const s of this.solids) {
+      if (s.type === 'circle') {
+        const dx = player.pos.x - s.pos.x, dz = player.pos.z - s.pos.z;
+        const d = Math.hypot(dx, dz);
+        const min = s.r + pr;
+        if (d < min) {
+          if (d > 1e-4) { player.pos.x = s.pos.x + (dx / d) * min; player.pos.z = s.pos.z + (dz / d) * min; }
+          else { player.pos.x = s.pos.x + min; }
+        }
+      } else { // box (AABB) — push out along nearest face
+        const nx = Math.max(s.pos.x - s.hx, Math.min(player.pos.x, s.pos.x + s.hx));
+        const nz = Math.max(s.pos.z - s.hz, Math.min(player.pos.z, s.pos.z + s.hz));
+        const dx = player.pos.x - nx, dz = player.pos.z - nz;
+        const d = Math.hypot(dx, dz);
+        if (d > 1e-4) {
+          if (d < pr) { player.pos.x = nx + (dx / d) * pr; player.pos.z = nz + (dz / d) * pr; }
+        } else {
+          // center inside the box: eject along the shallowest axis
+          const left = player.pos.x - (s.pos.x - s.hx), right = (s.pos.x + s.hx) - player.pos.x;
+          const top = player.pos.z - (s.pos.z - s.hz), bot = (s.pos.z + s.hz) - player.pos.z;
+          const m = Math.min(left, right, top, bot);
+          if (m === left) player.pos.x = s.pos.x - s.hx - pr;
+          else if (m === right) player.pos.x = s.pos.x + s.hx + pr;
+          else if (m === top) player.pos.z = s.pos.z - s.hz - pr;
+          else player.pos.z = s.pos.z + s.hz + pr;
+        }
+      }
+    }
   }
 
   // Returns one of: null, 'win', 'lose'
   update(dt, player) {
     this.elapsed += dt;
+
+    // keep the player out of solid obstacles (corals + split-route walls)
+    if (this.solids.length) this.resolveCollisions(player);
 
     // animate goal markers
     this.submarine.userData.ring.rotation.z += dt;
@@ -217,7 +285,7 @@ export class Level {
   }
 
   dispose() {
-    [...this.coins, ...this.corals].forEach((m) => this.scene.remove(m));
+    [...this.coins, ...this.corals, ...this.barriers].forEach((m) => this.scene.remove(m));
     this.hazards.forEach((hz) => this.scene.remove(hz.mesh));
     if (this.bossCtrl) this.bossCtrl.dispose();
     this.sharks.forEach((s) => s.dispose(this.scene));

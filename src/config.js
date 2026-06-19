@@ -22,7 +22,10 @@ export const LEVELS = [
   { id: 1, name: 'First Dive',     coinsToWin: 8,  sharks: [{ type: 'normal', delay: 4 }], corals: 6,  objective: 'Collect 8 treasures, then reach the YELLOW SUBMARINE' },
   { id: 2, name: 'Faster Waters',  coinsToWin: 12, sharks: [{ type: 'fast', delay: 3 }], corals: 10, objective: 'Coins are everywhere — grab 12 and escape the fast shark' },
   { id: 3, name: 'Coral Maze',     coinsToWin: 14, sharks: [{ type: 'normal', delay: 3 }, { type: 'fast', delay: 7 }], corals: 22, objective: 'Two sharks hunt you. Collect 14 and reach the sub' },
-  { id: 4, name: 'Mutant Depths',  coinsToWin: 16, sharks: [{ type: 'mutant', delay: 2 }, { type: 'hammerhead', delay: 6 }], corals: 18, objective: 'A mutant shark stalks the split routes. Survive!' },
+  { id: 4, name: 'Mutant Depths',  coinsToWin: 16, sharks: [{ type: 'mutant', delay: 2 }, { type: 'hammerhead', delay: 6 }], corals: 14, splitRoute: true,
+    // Central divider wall splits the field into LEFT (risky/fast) and RIGHT (safe/slow) lanes.
+    barriers: [{ x: 0, z: 35, hx: 2.5, hz: 50 }],
+    objective: 'Pick a lane: LEFT (shark close) or RIGHT (longer, more coral)' },
   { id: 5, name: 'Boss Arena',     coinsToWin: 0,  boss: 'boss', bossHp: 5, hazards: 7, corals: 0, objective: 'Bait the BOSS into the sharp rocks!' },
   { id: 6, name: 'Final Escape',   coinsToWin: 0,  boss: 'kraken', tsunami: true, corals: 6, objective: 'Reach the LUXURY CAR before the TSUNAMI hits!' },
 ];

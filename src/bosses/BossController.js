@@ -119,7 +119,8 @@ export class BossController {
     this._contactDamage(player);
 
     if (this.timer <= 0) {
-      this.attack = ATTACKS[Math.floor(Math.random() * ATTACKS.length)];
+      // _forceAttack is a test-only hook (null in normal play) to force a specific pattern.
+      this.attack = this._forceAttack || ATTACKS[Math.floor(Math.random() * ATTACKS.length)];
       this.state = 'telegraph';
       this.timer = this.telegraphTime;
       this._hitThisMove = false;
@@ -182,11 +183,23 @@ export class BossController {
         player.pos.x += kx * 6; player.pos.z += kz * 6;
         if (d < 6) player.damage(1);
       }
+      // Pick the recoil direction: if the player baited a hazard roughly BEHIND the boss,
+      // the roar slams it straight back into that hazard (fast + far enough to actually reach).
+      // Otherwise it recoils straight back and most likely whiffs -> reset (no damage).
+      const back = { x: -this.lockDir.x, z: -this.lockDir.z };
+      let best = null, bestDist = Infinity;
+      for (const hz of this.hazards) {
+        const tx = hz.pos.x - this.boss.pos.x, tz = hz.pos.z - this.boss.pos.z;
+        const td = Math.hypot(tx, tz) || 1;
+        const dot = (tx / td) * back.x + (tz / td) * back.z; // alignment with the backward direction
+        if (dot > 0.25 && td < 24 && td < bestDist) { bestDist = td; best = { x: tx / td, z: tz / td }; }
+      }
+      this._roarDir = best || back; // snap toward a baited hazard, else straight back
     }
-    // boss recoils BACKWARD (opposite of the player it faced) — back into a hazard = hit
-    const back = -1;
-    this.boss.pos.x += this.lockDir.x * back * this.boss.speed * 1.6 * dt;
-    this.boss.pos.z += this.lockDir.z * back * this.boss.speed * 1.6 * dt;
+    // fast recoil so it can realistically reach a hazard the player set up behind the boss
+    const sp = this.boss.speed * 3.0;
+    this.boss.pos.x += this._roarDir.x * sp * dt;
+    this.boss.pos.z += this._roarDir.z * sp * dt;
     const hz = this._hazardHit();
     if (hz) return this._registerHit(hz);
     if (this.timer <= 0) { this.state = 'recover'; this.timer = this.recoverTime; this.boss.setTelegraph(false); }

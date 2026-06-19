@@ -80,6 +80,43 @@ const fail = await page.evaluate(async () => {
   return { startHp: hp0, endHp: p.hp, alive: p.alive, result, seconds: +(frames * dt).toFixed(2) };
 });
 
+// ---- TEST D: FORCED ROAR — prove ROAR can be a real damage source (was 0 before) ----
+// Force the boss to ONLY use roar, bait a hazard directly behind it each cycle,
+// and count how many HP drops come from roar.
+const roar = await page.evaluate(async () => {
+  const g = window.__ROS.game;
+  g.startLevel(4);
+  g.cinematic = null; g.controlLocked = false; g.onCine(null);
+  const c = g.level.bossCtrl, boss = g.level.boss, p = g.player, Hs = g.level.hazards;
+  c._forceAttack = 'roar';                 // test-only hook
+  c.begin(); g.paused = true;
+  const d = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+  const dt = 1 / 60; let prevHp = boss.hp; const hits = []; let frames = 0;
+  while (!c.defeated && frames < 12000 && p.alive) {
+    // pick hazard nearest boss; keep player on the OPPOSITE side so the hazard is
+    // behind the boss -> roar recoil slams the boss into it.
+    const hz = Hs.reduce((a, b) => (d(boss.pos, a.pos) < d(boss.pos, b.pos) ? a : b));
+    const dirx = hz.pos.x - boss.pos.x, dz = hz.pos.z - boss.pos.z, L = Math.hypot(dirx, dz) || 1;
+    if (c.state === 'idle' || c.state === 'recover' || c.state === 'frozen') {
+      p.pos.x = hz.pos.x - (dirx / L) * 10; p.pos.z = hz.pos.z - (dz / L) * 10; p.invuln = 99;
+    } else if (c.state === 'telegraph') {
+      p.pos.x = boss.pos.x - (dirx / L) * 6; p.pos.z = boss.pos.z - (dz / L) * 6; p.invuln = 99;
+    } else { p.invuln = 99; }
+    const atk = c.attack;
+    g.level.update(dt, p);
+    if (boss.hp < prevHp) { hits.push(atk); prevHp = boss.hp; }
+    frames++;
+  }
+  return { defeated: c.defeated, hitsFromRoar: hits.filter((a) => a === 'roar').length, totalHits: hits.length, hits, seconds: +(frames * dt).toFixed(1) };
+});
+
+// ---- ratio of the natural (random-attack) winning run from TEST A ----
+const ratio = (() => {
+  const by = { charge: 0, roar: 0, wave: 0 };
+  for (const h of beat.hits) by[h.attack] = (by[h.attack] || 0) + 1;
+  return by;
+})();
+
 console.log('===BOSS_TEST_JSON===');
-console.log(JSON.stringify({ beat, codeCheck, fail, pageErrors: logs }, null, 2));
+console.log(JSON.stringify({ beat_ratio: ratio, beat, codeCheck, fail, roar, pageErrors: logs }, null, 2));
 await browser.close();
