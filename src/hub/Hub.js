@@ -124,8 +124,35 @@ export class Hub {
     this.add(npc, x, 0, z); this.npcs.push(npc);
   }
 
-  // Kick the wheel into a fast spin (called when the player actually spins it).
-  spinWheel() { this._wheelBoost = 14; }
+  // Spin the physical wheel so the TOP pointer lands on segment `index`, after several
+  // full turns with ease-out. Resolves when it stops (UI reveals/apply the prize then).
+  // Mapping: segment i centre (local CCW from +X) = ((i+0.5)/N)*2π; pointer is at the top
+  // = +Y = π/2, so we need wheel.rotation.z ≡ π/2 - centre_i (mod 2π). Idle spin is CW
+  // (rotation.z decreasing), so we land from above by subtracting full turns.
+  spinWheel(index, segments = 6) {
+    const wheel = this.wheelObj && this.wheelObj.userData.wheel;
+    if (!wheel) return Promise.resolve();
+    const TWO_PI = Math.PI * 2;
+    const centre = ((index + 0.5) / segments) * TWO_PI;
+    const targetMod = Math.PI / 2 - centre;        // congruent target (mod 2π)
+    const start = wheel.rotation.z;
+    let end = targetMod;                           // bring end to >= ~5 turns BELOW start
+    const turns = 5;
+    while (end > start - turns * TWO_PI) end -= TWO_PI;
+    const dur = 3.4;
+    this._spinning = true;
+    const ease = (x) => 1 - Math.pow(1 - x, 3);    // easeOutCubic
+    return new Promise((resolve) => {
+      const t0 = performance.now();
+      const step = () => {
+        const p = Math.min(1, (performance.now() - t0) / 1000 / dur);
+        wheel.rotation.z = start + (end - start) * ease(p);
+        if (p < 1) requestAnimationFrame(step);
+        else { wheel.rotation.z = end; this._spinning = false; resolve(); }
+      };
+      requestAnimationFrame(step);
+    });
+  }
 
   _zone(name, panel, x, z, r, color) {
     const marker = makeZoneMarker(r, color); this.add(marker, x, 0, z);
@@ -149,10 +176,10 @@ export class Hub {
     this.zones.forEach((z) => { if (z.marker.userData.ring) z.marker.userData.ring.rotation.z += dt * 1.5; });
     if (this.arrows) this.arrows.forEach((a, i) => { a.position.y = 0.6 + Math.sin(this._t * 3 + i) * 0.15; });
     if (this.npcs) this.npcs.forEach((n, i) => { n.position.y = Math.abs(Math.sin(this._t * 2 + i)) * 0.08; });
-    // Lucky wheel: slow idle spin + a decaying boost when the player spins it.
-    if (this.wheelObj) {
-      this._wheelBoost = Math.max(0, (this._wheelBoost || 0) - dt * 6);
-      this.wheelObj.userData.wheel.rotation.z -= (0.6 + this._wheelBoost) * dt;
+    // Lucky wheel: slow idle spin, but ONLY when not mid-spin (spin is driven by its own
+    // rAF in spinWheel() so it works even while the game loop is paused for the panel).
+    if (this.wheelObj && !this._spinning) {
+      this.wheelObj.userData.wheel.rotation.z -= 0.6 * dt;
     }
     // trigger detection with hysteresis (must leave before re-arming)
     let fired = null;

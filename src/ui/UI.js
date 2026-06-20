@@ -502,19 +502,31 @@ export class UI {
       card.appendChild(h('h2', 'head', '🎡 Lucky Wheel'));
       card.appendChild(h('div', 'subtitle', 'Spin for coins, cash, or gems!'));
       const result = h('div', 'subtitle', '&nbsp;');
-      card.appendChild(this.btn('Spin (💎 1)', 'gold', () => {
+      // The PHYSICAL wheel decides the result: pick the index, spin to land the pointer on
+      // it, then reveal+apply only after it stops. (Index is chosen here; the wheel is
+      // animated to match, so label shown == segment under the pointer.)
+      const doSpin = async (btn) => {
+        if (this._wheelSpinning) return;
+        this._wheelSpinning = true; btn.disabled = true; result.textContent = 'Spinning…';
+        const index = Math.floor(Math.random() * WHEEL_PRIZES.length);
+        const hub = this.game.hub;
+        if (hub && hub.spinWheel) await hub.spinWheel(index, WHEEL_PRIZES.length);
+        const prize = WHEEL_PRIZES[index];
+        prize.apply(this.economy);
+        result.textContent = `🎉 ${prize.label}`;
+        this._wheelSpinning = false; btn.disabled = false;
+      };
+      const spinBtn = this.btn('Spin (💎 1)', 'gold', () => {
+        if (this._wheelSpinning) return;
         if (!this.economy.spendGems(1)) return this.toast('Need 1 gem (get gems from daily/wheel)');
-        this.game.hub?.spinWheel();      // spin the physical wheel in the world
-        const prize = WHEEL_PRIZES[Math.floor(Math.random() * WHEEL_PRIZES.length)];
-        prize.apply(this.economy); result.textContent = `🎉 ${prize.label}`;
-      }));
-      card.appendChild(this.btn('Free Spin (📺 Ad)', 'small', async () => {
-        if (await this.ads.rewarded()) {
-          this.game.hub?.spinWheel();
-          const prize = WHEEL_PRIZES[Math.floor(Math.random() * WHEEL_PRIZES.length)];
-          prize.apply(this.economy); result.textContent = `🎉 ${prize.label}`;
-        }
-      }));
+        doSpin(spinBtn);
+      });
+      card.appendChild(spinBtn);
+      const adBtn = this.btn('Free Spin (📺 Ad)', 'small', async () => {
+        if (this._wheelSpinning) return;
+        if (await this.ads.rewarded()) doSpin(adBtn);
+      });
+      card.appendChild(adBtn);
       card.appendChild(result); card.appendChild(this.back());
       s.appendChild(card); return s;
     });
