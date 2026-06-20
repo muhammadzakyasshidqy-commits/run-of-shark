@@ -73,3 +73,18 @@ h2.head { color: #fff; font-size: 26px; margin-bottom: 14px; }
 
 .toast { position: absolute; top: 120px; left: 50%; transform: translateX(-50%); background: rgba(4,38,61,.9); color: #fff; padding: 10px 18px; border-radius: 12px; font-weight: 700; opacity: 0; transition: opacity .3s; }
 .toast.on { opacity: 1; }
+
+/* --- Celebration / cutscene FX --- */
+.confetti-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 60; }
+.confetti { position: absolute; top: -20px; width: 11px; height: 16px; border-radius: 2px; opacity: .95; animation: confetti-fall linear forwards; }
+@keyframes confetti-fall { to { transform: translateY(108vh) rotate(720deg); opacity: .9; } }
+
+.screen-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 70; transition: opacity .12s ease-out; }
+.screen-flash.on { opacity: .85; transition: opacity .35s ease-in; }
+
+.card.pop { animation: card-pop .4s cubic-bezier(.2,1.4,.4,1) both; }
+@keyframes card-pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.credits-block { margin: 14px 0; }
+.credits-role { color: #9cc6e0; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; margin-top: 8px; }
+.credits-name { color: #ffd166; font-size: 30px; font-weight: 900; letter-spacing: 3px; text-shadow: 0 0 14px rgba(255,209,102,.5); }

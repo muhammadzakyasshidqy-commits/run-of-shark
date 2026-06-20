@@ -93,7 +93,8 @@ export class Level {
       const isChest = i % 5 === 4;
       const m = isChest ? makeTreasure() : makeCoin();
       m.position.set((Math.random() - 0.5) * WORLD.size * 1.5, isChest ? 0.2 : 1, -30 + Math.random() * (WORLD.size + 10));
-      m.userData.value = isChest ? 5 : 1;
+      // Higher pickup value so the core collect loop itself pays well (was 1 / 5).
+      m.userData.value = isChest ? 25 : 6;
       m.userData.chest = isChest;
       this.scene.add(m);
       this.coins.push(m);

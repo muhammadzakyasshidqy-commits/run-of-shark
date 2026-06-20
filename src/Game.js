@@ -55,6 +55,7 @@ export class Game {
     this.onLose = () => {};
     this.onHud = () => {};
     this.onCine = () => {};     // ({title, sub}) or null — UI shows/hides the cinematic banner
+    this.onFlash = () => {};    // brief white screen flash (UI), used on big hits/victories
 
     this._initDebug();
     this._resize();
@@ -230,14 +231,18 @@ export class Game {
     this.player.pos.set(this.hub.spawn.x, 0.2, this.hub.spawn.z);
     this.player.mesh.rotation.y = Math.PI; // face the island interior
     this.camYaw = Math.PI;
+    this._committedHeading = null; this._lastRawAngle = null;
     this.running = true; this.paused = false; this.controlLocked = false; this.cinematic = null;
     this.audio.startMusic();
+    this.audio.startAmbient();          // island wave ambience
     this.input.setTouchVisible(true);
   }
 
   startLevel(index) {
     this.disposeLevel();
     this.mode = 'level';
+    this.audio.stopAmbient();
+    this._committedHeading = null; this._lastRawAngle = null;
     this._setWater(true);
     const def = LEVELS[index];
     this.levelIndex = index;
@@ -286,15 +291,21 @@ export class Game {
     };
   }
 
-  // --- Boss defeat cutscene: boss sinks + text, then resolve to win ---
+  // --- Boss defeat cutscene: victory flash + burst, boss sinks + text, then win ---
   _bossDefeat() {
     this.controlLocked = true;
     const boss = this.level.boss;
     this.audio.win();
-    this.onCine({ title: 'BOSS DEFEATED!', sub: '' });
-    const dur = 3.2; let t = 0;
+    this.shake = 1.0;                                   // impact shake
+    this.onFlash && this.onFlash();                    // white screen flash (UI)
+    // celebratory particle bursts around the boss
+    for (let i = 0; i < 5; i++) this.effects.burst(boss.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 6, Math.random() * 4, (Math.random() - 0.5) * 6)), 0xffd166, 16);
+    this.effects.ring(boss.pos, 0xffffff, 16, 0.6);
+    this.onCine({ title: '🏆 BOSS DEFEATED!', sub: '' });
+    const dur = 3.2; let t = 0; let bursts = 0;
     this.cinematic = (dt) => {
       t += dt;
+      if (t > bursts * 0.4 && bursts < 6) { this.effects.burst(boss.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 8, Math.random() * 5, (Math.random() - 0.5) * 8)), [0xffd166, 0x06d6a0, 0x2ec4ff][bursts % 3], 14); bursts++; }
       boss.mesh.position.y -= dt * 2.2;        // sink
       boss.mesh.rotation.z += dt * 1.5;        // roll over
       boss.mesh.rotation.x += dt * 0.6;

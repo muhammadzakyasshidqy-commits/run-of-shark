@@ -2,7 +2,7 @@
 // Walking into an area's trigger zone opens the SAME validated DOM panel
 // (showBank/showShop/showGarage/showLevels/showWheel) — only the way IN changed.
 import * as THREE from 'three';
-import { makeBank, makeShop, makeGarage, makeTower, makeZoneMarker } from './buildings.js';
+import { makeBank, makeShop, makeGarage, makeTower, makeZoneMarker, makeNPC, makeArrow } from './buildings.js';
 import { makeDock, makeBoat, makeCar } from '../entities/Models.js';
 
 const CENTER = { x: 0, z: -12 };
@@ -80,6 +80,29 @@ export class Hub {
       t.traverse((o) => { if (o.isMesh) o.castShadow = true; });
       this.add(t, x, 0, z);
     }
+
+    // Direction arrows on the ground (plaza -> each building) so newcomers don't get lost.
+    this.arrows = [];
+    const arrowSpecs = [
+      { to: [0, -22], color: 0x2ec4ff }, { to: [-30, -10], color: 0xffd166 },
+      { to: [28, -14], color: 0x2ecc71 }, { to: [0, -40], color: 0xe74c3c }, { to: [0, 26], color: 0x06d6a0 },
+    ];
+    for (const sp of arrowSpecs) {
+      const ar = makeArrow(sp.color);
+      const ang = Math.atan2(sp.to[0] - 0, sp.to[1] - 14);
+      ar.rotation.y = ang;
+      const px = 0 + Math.sin(ang) * 9, pz = 14 + Math.cos(ang) * 9;
+      this.add(ar, px, 0.6, pz);
+      this.arrows.push(ar);
+    }
+
+    // Static villager NPCs so the island feels populated (idle bob in update()).
+    this.npcs = [];
+    const npcSpots = [[-26, -4, 0x4a90d9], [-22, 4, 0xe67e22], [30, -8, 0x9b59b6], [6, -44, 0x16a085], [-6, 20, 0xe74c3c], [10, 8, 0xf1c40f]];
+    for (const [x, z, c] of npcSpots) {
+      const npc = makeNPC(c); npc.rotation.y = Math.random() * Math.PI * 2;
+      this.add(npc, x, 0, z); this.npcs.push(npc);
+    }
   }
 
   _zone(name, panel, x, z, r, color) {
@@ -100,8 +123,10 @@ export class Hub {
       const ox = player.pos.x - s.x, oz = player.pos.z - s.z, od = Math.hypot(ox, oz), min = s.r + this.playerRadius;
       if (od < min && od > 1e-4) { player.pos.x = s.x + (ox / od) * min; player.pos.z = s.z + (oz / od) * min; }
     }
-    // animate markers
+    // animate markers + arrows + NPC idle bob (cheap, keeps the island feeling alive)
     this.zones.forEach((z) => { if (z.marker.userData.ring) z.marker.userData.ring.rotation.z += dt * 1.5; });
+    if (this.arrows) this.arrows.forEach((a, i) => { a.position.y = 0.6 + Math.sin(this._t * 3 + i) * 0.15; });
+    if (this.npcs) this.npcs.forEach((n, i) => { n.position.y = Math.abs(Math.sin(this._t * 2 + i)) * 0.08; });
     // trigger detection with hysteresis (must leave before re-arming)
     let fired = null;
     for (const z of this.zones) {

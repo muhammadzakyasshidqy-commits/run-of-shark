@@ -82,4 +82,31 @@ export class AudioManager {
   }
 
   stopMusic() { if (this._musicTimer) { clearInterval(this._musicTimer); this._musicTimer = null; } }
+
+  // Gentle ambient wave wash for the island (soft filtered noise swells). Procedural,
+  // very low volume; reuses the master gain. Honest note: this is a synthesized "shhh"
+  // wave bed, not recorded ocean/birds.
+  startAmbient() {
+    if (!this.settings.sfx || this._ambientTimer) return;
+    this._ensure();
+    const wave = () => {
+      if (!this.settings.sfx) return;
+      const t = this.ctx.currentTime, dur = 2.6;
+      const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * dur, this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.5;
+      const src = this.ctx.createBufferSource(); src.buffer = buf;
+      const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.06, t + 1.0);
+      g.gain.linearRampToValueAtTime(0.0001, t + dur);
+      src.connect(lp); lp.connect(g); g.connect(this.master);
+      src.start(t); src.stop(t + dur);
+    };
+    wave();
+    this._ambientTimer = setInterval(wave, 2400);
+  }
+
+  stopAmbient() { if (this._ambientTimer) { clearInterval(this._ambientTimer); this._ambientTimer = null; } }
 }

@@ -22,6 +22,7 @@ export class UI {
     game.onLose = (i) => this._lose(i);
     game.onCine = (data) => this._cine(data);
     game.onHubTrigger = (panel) => this._openHubPanel(panel);
+    game.onFlash = () => this._flash();
     this.showMenu();
   }
 
@@ -149,7 +150,12 @@ export class UI {
        ['🎁 Daily', () => this.showDaily()], ['⚙️ Settings', () => this.showSettings()]].forEach(([l, f]) =>
         grid.appendChild(this.btn(l, 'small', f)));
       card.appendChild(grid);
+      // Watch-ad free coins (uses the existing AdManager abstraction; no real ad network).
+      card.appendChild(this.btn('📺 Free Coins (Watch Ad)', 'gold small', async () => {
+        if (await this.ads.rewarded()) { this.economy.addCoins(200); this.toast('+200 coins!'); this.showMenu(); }
+      }));
       card.appendChild(h('div', 'muted', 'On the island: Tower=Levels · Bank · Shop · Garage · Wheel · Dock'));
+      card.appendChild(h('div', 'muted', '<span style="opacity:.8">A game by <b style="color:#ffd166">Harun</b> · Dev: <b style="color:#ffd166">Zaky</b></span>'));
       s.appendChild(card);
       return s;
     });
@@ -232,9 +238,11 @@ export class UI {
     if (i === LEVELS.length - 1) return this._ending();
 
     this.showHud(false);
+    this.confetti(40);          // celebratory burst
+    this.audio.win();
     this.open(() => {
-      const s = h('div', 'screen'); const card = h('div', 'card');
-      card.appendChild(h('div', 'title', 'ESCAPED!'));
+      const s = h('div', 'screen'); const card = h('div', 'card pop');
+      card.appendChild(h('div', 'title', 'LEVEL CLEARED!'));
       card.appendChild(h('div', 'subtitle', `Level ${lv.id} complete — <b>+${reward} 🪙</b>`));
       card.appendChild(h('div', 'muted', parts.join(' · ')));
       const r = h('div', 'row');
@@ -271,11 +279,11 @@ export class UI {
   _ending() {
     this.showHud(false);
     const lines = [
-      'The tsunami swallows the island...',
-      'You floor the luxury car up the cliff road.',
-      'The wave roars behind you — closer, closer...',
-      'You make it to the summit. Safe.',
-      'RUN OF SHARK — Complete.',
+      '🌊 A GIANT TSUNAMI rises over the island...',
+      'You sprint to the LUXURY CAR and floor it up the cliff road.',
+      'The wave ROARS behind you — closer, closer...',
+      'Tires screaming, you crest the summit — and the wave breaks below.',
+      'YOU ESCAPED THE TSUNAMI!',
     ];
     this.audio.tsunami();
     let idx = 0;
@@ -291,11 +299,42 @@ export class UI {
 
   _credits(s) {
     s.innerHTML = '';
+    this.confetti(60);
     const card = h('div', 'card');
-    card.appendChild(h('div', 'title', 'THE END'));
-    card.appendChild(h('div', 'subtitle', 'Thanks for playing RUN OF SHARK!<br>Lead Developer: You'));
+    card.appendChild(h('div', 'title', '🏆 YOU ESCAPED!'));
+    card.appendChild(h('div', 'subtitle', 'You outran the tsunami and finished RUN OF SHARK!'));
+    // Credits block: game by Harun, developed by Zaky.
+    const credits = h('div', 'credits-block');
+    credits.innerHTML = '<div class="credits-role">A game by</div><div class="credits-name">HARUN</div>' +
+      '<div class="credits-role">Developer</div><div class="credits-name">ZAKY</div>';
+    card.appendChild(credits);
     card.appendChild(this.btn('Back to Menu', 'green', () => this.showMenu()));
     s.appendChild(card);
+  }
+
+  // Brief white screen flash for big impacts/victories.
+  _flash() {
+    const f = h('div', 'screen-flash');
+    this.root.appendChild(f);
+    requestAnimationFrame(() => { f.classList.add('on'); });
+    setTimeout(() => f.remove(), 450);
+  }
+
+  // Lightweight DOM confetti burst (no 3D cost). n falling coloured chips.
+  confetti(n = 40) {
+    const colors = ['#ffd166', '#06d6a0', '#2ec4ff', '#ff6b6b', '#9b59b6', '#feca57'];
+    const layer = h('div', 'confetti-layer');
+    for (let i = 0; i < n; i++) {
+      const c = h('div', 'confetti');
+      c.style.left = Math.random() * 100 + 'vw';
+      c.style.background = colors[i % colors.length];
+      c.style.animationDelay = (Math.random() * 0.5) + 's';
+      c.style.animationDuration = (1.6 + Math.random() * 1.4) + 's';
+      c.style.transform = `rotate(${Math.random() * 360}deg)`;
+      layer.appendChild(c);
+    }
+    this.root.appendChild(layer);
+    setTimeout(() => layer.remove(), 3200);
   }
 
   // ---------- SHOP ----------

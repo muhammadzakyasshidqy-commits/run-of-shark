@@ -81,9 +81,15 @@ export function makeGarage(ownedVehicleIds = []) {
 export function makeTower(highestUnlocked = 1) {
   const g = new THREE.Group();
   const base = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 4.5, 3, 8), mat(0x8d6e63)); base.position.y = 1.5; g.add(base);
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(2, 3, 12, 8), mat(0xa1887f)); shaft.position.y = 9; g.add(shaft);
-  const top = new THREE.Mesh(new THREE.ConeGeometry(3, 4, 8), mat(0xc0392b)); top.position.y = 17; g.add(top);
-  const flag = new THREE.Mesh(new THREE.PlaneGeometry(2, 1.2), mat(0xffd166, false)); flag.position.set(1.2, 18.5, 0); g.add(flag);
+  // banded shaft (two colours) — taller so it's the clear island landmark
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 3.2, 14, 8), mat(0xa1887f)); shaft.position.y = 10; g.add(shaft);
+  for (let i = 0; i < 4; i++) { const band = new THREE.Mesh(new THREE.CylinderGeometry(2.3 + (3 - i) * 0.07, 2.4 + (3 - i) * 0.07, 0.6, 8), mat(0xc0392b)); band.position.y = 5 + i * 3.2; g.add(band); }
+  const balcony = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 0.5, 8), mat(0x8d6e63)); balcony.position.y = 17.2; g.add(balcony);
+  const top = new THREE.Mesh(new THREE.ConeGeometry(3.2, 5, 8), mat(0xc0392b)); top.position.y = 20; g.add(top);
+  // glowing beacon + pole, visible from across the island
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8), mat(0xffe066, false, { emissive: 0xffaa00, emissiveIntensity: 1 })); beacon.position.y = 23.2; g.add(beacon);
+  const flagPole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2, 5), mat(0x333333)); flagPole.position.set(0, 24.5, 0); g.add(flagPole);
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(2, 1.2), mat(0xffd166, false)); flag.position.set(1.1, 24.8, 0); g.add(flag);
   // level markers spiralling up
   for (let i = 0; i < LEVELS.length; i++) {
     const unlocked = highestUnlocked >= LEVELS[i].id;
@@ -95,6 +101,30 @@ export function makeTower(highestUnlocked = 1) {
   }
   const sign = makeSign('LEVELS', 5, '#10243a', '#2ec4ff'); sign.position.set(0, 3, 4.2); g.add(sign);
   g.traverse((o) => { if (o.isMesh && !o.userData.isSign) o.castShadow = true; });
+  return g;
+}
+
+// Simple static low-poly villager NPC (chunky, idle-bobbing handled by Hub).
+export function makeNPC(shirt = 0x4a90d9) {
+  const g = new THREE.Group();
+  const skin = 0xffc9a3;
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.5, 3, 7), mat(shirt)); body.position.y = 0.95; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), mat(skin, false)); head.position.y = 1.6; g.add(head);
+  for (const s of [-1, 1]) { const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.4, 3, 6), mat(shirt)); arm.position.set(s * 0.36, 0.95, 0); g.add(arm); }
+  for (const s of [-1, 1]) { const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.4, 3, 6), mat(0x34495e)); leg.position.set(s * 0.15, 0.4, 0); g.add(leg); }
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+
+// Floating directional chevron arrow pointing toward a building (helps new players).
+export function makeArrow(color = 0xffd166) {
+  const g = new THREE.Group();
+  for (let i = 0; i < 2; i++) {
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.9, 4),
+      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5, flatShading: true }));
+    head.rotation.x = Math.PI / 2; head.position.z = i * 0.8; g.add(head);
+  }
+  g.userData.float = true;
   return g;
 }
 
