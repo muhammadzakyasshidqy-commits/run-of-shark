@@ -36,7 +36,12 @@ export class Player {
       const a = makeAccessory(accessoryId);
       if (a) {
         const parts = this.mesh.userData.parts;
-        const host = (a.part === 'head' && parts?.head) ? parts.head : this.mesh;
+        // head items follow the head; body items attach to the lean group so a backpack/
+        // jetpack leans with the torso during the swim pose (offset down by the pivot height).
+        let host, yOff = 0;
+        if (a.part === 'head' && parts?.head) { host = parts.head; }
+        else { host = this.mesh.userData.lean || this.mesh; yOff = -1.0; }
+        a.obj.position.y += yOff;
         host.add(a.obj);
         this._accessory = a.obj;
       }
@@ -96,13 +101,14 @@ export class Player {
   _animate(dt, len, mode) {
     const parts = this.mesh.userData.parts;
     if (!parts) return;
+    const lean = this.mesh.userData.lean || this.mesh; // lean the mid-body pivot, not the feet
     const moving = len > 0.1;
-    this.mesh.rotation.order = 'YXZ'; // yaw (heading) then local pitch (lean)
 
     if (mode === 'level') {
-      // lean the whole body forward into a horizontal swim pose (more when moving)
-      const targetLean = moving ? -1.15 : -0.85;
-      this.mesh.rotation.x += (targetLean - this.mesh.rotation.x) * Math.min(1, dt * 5);
+      // lean the body forward into a prone swim pose, pivoting about its CENTRE so the
+      // head stays near the surface (no nose-dive).
+      const targetLean = moving ? -1.0 : -0.7;
+      lean.rotation.x += (targetLean - lean.rotation.x) * Math.min(1, dt * 5);
       this._phase += dt * (moving ? 11 : 4);
       // front-crawl: shoulders windmill in opposition, big sweep when moving
       const amp = moving ? 1.6 : 0.35, bias = -0.4;
@@ -114,7 +120,7 @@ export class Player {
       if (parts.torso) parts.torso.scale.y = 1 + Math.sin(this._phase * 0.5) * 0.02;
     } else {
       // upright walk cycle
-      this.mesh.rotation.x += (0 - this.mesh.rotation.x) * Math.min(1, dt * 5);
+      lean.rotation.x += (0 - lean.rotation.x) * Math.min(1, dt * 5);
       this._phase += dt * (moving ? 12 : 3);
       const swing = Math.sin(this._phase) * (moving ? 0.7 : 0.12);
       parts.shL.rotation.x = swing; parts.shR.rotation.x = -swing;

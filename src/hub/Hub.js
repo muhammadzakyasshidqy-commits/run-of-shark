@@ -2,8 +2,8 @@
 // Walking into an area's trigger zone opens the SAME validated DOM panel
 // (showBank/showShop/showGarage/showLevels/showWheel) — only the way IN changed.
 import * as THREE from 'three';
-import { makeBank, makeShop, makeGarage, makeTower, makeZoneMarker, makeNPC, makeArrow } from './buildings.js';
-import { makeDock, makeBoat, makeCar } from '../entities/Models.js';
+import { makeBank, makeGarage, makeTower, makeZoneMarker, makeNPC, makeArrow, makeLuckyWheel, makeKiosk } from './buildings.js';
+import { makeDock, makeBoat } from '../entities/Models.js';
 
 const CENTER = { x: 0, z: -12 };
 const ISLAND_R = 54;
@@ -25,6 +25,7 @@ export class Hub {
   add(obj, x, y, z) { obj.position.set(x, y, z); this.scene.add(obj); this.objects.push(obj); return obj; }
 
   _build() {
+    this.npcs = []; this.arrows = [];
     // Island platform (grass) + sandy rim
     const grass = new THREE.Mesh(new THREE.CylinderGeometry(ISLAND_R, ISLAND_R + 2, 2, 40),
       new THREE.MeshStandardMaterial({ color: 0x6ab04c, flatShading: true, roughness: 1 }));
@@ -44,19 +45,32 @@ export class Hub {
     const tower = makeTower(this.save.data.highestLevel || 1); this.add(tower, 0, 0, -32);
     this._zone('tower', 'levels', 0, -22, 6, 0x2ec4ff); this._solid(0, -32, 5);
 
+    // BANK (left) — also houses the Upgrade/Training counter (money + stat-boosts both fit here)
     const bank = makeBank(); this.add(bank, -36, 0, -16);
-    this._zone('bank', 'bank', -30, -10, 6, 0xffd166); this._solid(-36, -16, 6);
+    this._zone('bank', 'bank', -30, -10, 5.5, 0xffd166); this._solid(-36, -16, 6);
+    this._npc(-30, -6, 0x2c3e50, 0x111111);  // bank teller
 
-    const wheel = makeZoneMarker(4.5, 0xff6b6b); // lucky wheel pad in the bank plaza
-    const wheelPost = makeCar(0xff6b6b); // playful spinner stand-in
-    this.add(wheel, -34, 0, 2); this.add(wheelPost, -34, 0.2, 2);
-    this._zone('wheel', 'wheel', -34, 2, 4.5, 0xff6b6b);
+    // Real LUCKY WHEEL (left plaza)
+    this.wheelObj = makeLuckyWheel(6); this.add(this.wheelObj, -34, 0, 4);
+    this.add(makeZoneMarker(4.2, 0xff6b6b), -34, 0, 8);
+    this._zone('wheel', 'wheel', -34, 8, 4.2, 0xff6b6b);
+    this._npc(-30, 8, 0xff6b6b, 0xffd166);   // carnival barker
 
-    const shop = makeShop(); this.add(shop, 36, 0, -14);
-    this._zone('shop', 'shop', 28, -14, 6, 0x2ecc71); this._solid(36, -14, 6);
+    // SHOP DISTRICT (right) — three SEPARATE physical kiosks, each its own trigger + NPC.
+    // Vehicles are intentionally NOT sold here anymore (garage-only).
+    const skinShop = makeKiosk('SKINS', 0x9b59b6, 0x2ec4ff); this.add(skinShop, 40, 0, -20); this._solid(40, -20, 5.5);
+    this._zone('skinshop', 'skins', 31, -18, 5, 0x9b59b6); this._npc(31, -14, 0x9b59b6, 0x2ec4ff);
 
+    const accShop = makeKiosk('GEAR', 0xf1c40f, 0xff9f43); this.add(accShop, 40, 0, -4); this._solid(40, -4, 5.5);
+    this._zone('accshop', 'accessories', 31, -4, 5, 0xf1c40f); this._npc(31, 0, 0xe67e22, 0xffffff);
+
+    const upgShop = makeKiosk('UPGRADES', 0x06d6a0, 0x2ecc71); this.add(upgShop, 40, 0, 12); this._solid(40, 12, 5.5);
+    this._zone('upgradeshop', 'upgrades', 31, 12, 5, 0x06d6a0); this._npc(31, 16, 0x16a085, 0xffd166);
+
+    // GARAGE (back) — vehicles only — with a mechanic NPC out front
     const garage = makeGarage(this.save.data.ownedVehicles || []); this.add(garage, 0, 0, -50);
     this._zone('garage', 'garage', 0, -40, 6, 0xe74c3c); this._solid(0, -50, 7);
+    this._npc(-5, -42, 0x34495e, 0xe74c3c);  // mechanic (overalls + red rag)
 
     // Dock + green boat at the front — the "start a mission" point
     const dock = makeDock(16); this.add(dock, 0, 0, 30);
@@ -81,11 +95,14 @@ export class Hub {
       this.add(t, x, 0, z);
     }
 
-    // Direction arrows on the ground (plaza -> each building) so newcomers don't get lost.
-    this.arrows = [];
+    // Direction arrows on the ground (plaza -> each area) so newcomers don't get lost.
     const arrowSpecs = [
-      { to: [0, -22], color: 0x2ec4ff }, { to: [-30, -10], color: 0xffd166 },
-      { to: [28, -14], color: 0x2ecc71 }, { to: [0, -40], color: 0xe74c3c }, { to: [0, 26], color: 0x06d6a0 },
+      { to: [0, -22], color: 0x2ec4ff },   // tower / levels
+      { to: [-30, -10], color: 0xffd166 }, // bank
+      { to: [-34, 8], color: 0xff6b6b },   // wheel
+      { to: [31, -4], color: 0xf1c40f },   // shop district
+      { to: [0, -40], color: 0xe74c3c },   // garage
+      { to: [0, 26], color: 0x06d6a0 },    // dock
     ];
     for (const sp of arrowSpecs) {
       const ar = makeArrow(sp.color);
@@ -96,14 +113,19 @@ export class Hub {
       this.arrows.push(ar);
     }
 
-    // Static villager NPCs so the island feels populated (idle bob in update()).
-    this.npcs = [];
-    const npcSpots = [[-26, -4, 0x4a90d9], [-22, 4, 0xe67e22], [30, -8, 0x9b59b6], [6, -44, 0x16a085], [-6, 20, 0xe74c3c], [10, 8, 0xf1c40f]];
-    for (const [x, z, c] of npcSpots) {
-      const npc = makeNPC(c); npc.rotation.y = Math.random() * Math.PI * 2;
-      this.add(npc, x, 0, z); this.npcs.push(npc);
-    }
+    // a couple of ambient wanderers in the plaza (shopkeepers were added per-zone via _npc)
+    this._npc(-8, 18, 0x4a90d9, 0xffffff);
+    this._npc(9, 6, 0xe67e22, 0x2c3e50);
   }
+
+  // Place a shopkeeper/villager NPC; colours vary so they aren't clones. Tracked for idle-bob.
+  _npc(x, z, shirt, hat) {
+    const npc = makeNPC(shirt, hat); npc.rotation.y = Math.random() * Math.PI * 2;
+    this.add(npc, x, 0, z); this.npcs.push(npc);
+  }
+
+  // Kick the wheel into a fast spin (called when the player actually spins it).
+  spinWheel() { this._wheelBoost = 14; }
 
   _zone(name, panel, x, z, r, color) {
     const marker = makeZoneMarker(r, color); this.add(marker, x, 0, z);
@@ -127,6 +149,11 @@ export class Hub {
     this.zones.forEach((z) => { if (z.marker.userData.ring) z.marker.userData.ring.rotation.z += dt * 1.5; });
     if (this.arrows) this.arrows.forEach((a, i) => { a.position.y = 0.6 + Math.sin(this._t * 3 + i) * 0.15; });
     if (this.npcs) this.npcs.forEach((n, i) => { n.position.y = Math.abs(Math.sin(this._t * 2 + i)) * 0.08; });
+    // Lucky wheel: slow idle spin + a decaying boost when the player spins it.
+    if (this.wheelObj) {
+      this._wheelBoost = Math.max(0, (this._wheelBoost || 0) - dt * 6);
+      this.wheelObj.userData.wheel.rotation.z -= (0.6 + this._wheelBoost) * dt;
+    }
     // trigger detection with hysteresis (must leave before re-arming)
     let fired = null;
     for (const z of this.zones) {

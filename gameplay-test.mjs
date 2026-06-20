@@ -29,13 +29,24 @@ const data = await p.evaluate(async () => {
   r.unequipClears = g.player._accessory === null;
   g.economy.s.equippedAccessory = 'crown'; g.refreshPlayerAppearance(); // put crown back for the shot
 
-  // SWIM vs WALK animation: drive a few frames in each mode, record body lean + arm pose
+  // SWIM vs WALK: record lean (on the pivot group now) + WORLD head height to prove no nose-dive.
+  const headWorldY = () => {
+    const h = g.player.mesh.userData.parts.head;
+    g.player.mesh.updateWorldMatrix(true, true);   // matrices aren't auto-updated while paused
+    const v = new (g.player.mesh.position.constructor)();
+    h.getWorldPosition(v);
+    return +v.y.toFixed(2);
+  };
   const drive = (mode) => {
     const inp = { x: 0, z: 1, len: 1, sprint: false };
-    for (let i = 0; i < 40; i++) g.player.update(1 / 60, inp, mode);
-    const parts = g.player.mesh.userData.parts;
-    return { leanX: +g.player.mesh.rotation.x.toFixed(2), armL: +parts.shL.rotation.x.toFixed(2) };
+    g.player.pos.set(0, 0.2, -60);
+    for (let i = 0; i < 60; i++) { g.player.pos.set(0, 0.2, -60); g.player.update(1 / 60, inp, mode); }
+    const lean = g.player.mesh.userData.lean;
+    return { leanX: +lean.rotation.x.toFixed(2), armL: +g.player.mesh.userData.parts.shL.rotation.x.toFixed(2), headWorldY: headWorldY() };
   };
+  // idle head height (no movement) for comparison
+  g.player.pos.set(0, 0.2, -60); for (let i = 0; i < 5; i++) g.player.update(1 / 60, { x: 0, z: 0, len: 0, sprint: false }, 'hub');
+  r.idleHeadY = headWorldY();
   r.swim = drive('level');
   r.walk = drive('hub');
 

@@ -18,32 +18,39 @@ const capsule = (r, len, color, seg = 6) => new THREE.Mesh(new THREE.CapsuleGeom
 export function makeDiver(color = 0x2ec4ff) {
   const g = new THREE.Group();
   const skinTone = 0xffc9a3;
+  // BODY pivot at mid-body height (PIVOT_Y). The swim lean rotates THIS group, so the
+  // body "floats" about its centre instead of swinging the head down from the feet
+  // (which caused the nose-dive). All parts live under `lean`; positions are offset by
+  // -PIVOT_Y so the resting visual is identical to before.
+  const PIVOT_Y = 1.0;
+  const lean = new THREE.Group(); lean.position.y = PIVOT_Y; g.add(lean);
+  const Y = (y) => y - PIVOT_Y;
 
   // torso — short & stout (outfit colour). userData.outfit lets the skin be recoloured live.
   const torso = capsule(0.34, 0.45, color, 8);
   torso.userData.outfit = true;
-  torso.position.y = 1.02; torso.scale.set(1, 1, 0.8); g.add(torso);
+  torso.position.y = Y(1.02); torso.scale.set(1, 1, 0.8); lean.add(torso);
   // chest stripe (lifejacket look)
   const vest = capsule(0.36, 0.2, 0xffffff, 8);
-  vest.position.y = 1.18; vest.scale.set(1.02, 1, 0.82); g.add(vest);
+  vest.position.y = Y(1.18); vest.scale.set(1.02, 1, 0.82); lean.add(vest);
 
   // big round head
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), mat(skinTone, false));
-  head.position.y = 1.85; g.add(head);
+  head.position.y = Y(1.85); lean.add(head);
   // dive goggles
   const goggles = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.2, 0.42), mat(0x12303a, false, { metalness: 0.3 }));
-  goggles.position.set(0, 1.9, 0.16); g.add(goggles);
+  goggles.position.set(0, Y(1.9), 0.16); lean.add(goggles);
   const glass = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.16, 0.06), mat(0x6fd3ff, false, { emissive: 0x113344, metalness: 0.4, roughness: 0.2 }));
-  glass.position.set(0, 1.9, 0.37); g.add(glass);
+  glass.position.set(0, Y(1.9), 0.37); lean.add(glass);
   // snorkel
   const snorkel = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.55, 6), mat(0xff7043));
-  snorkel.position.set(0.42, 2.0, 0.05); g.add(snorkel);
+  snorkel.position.set(0.42, Y(2.0), 0.05); lean.add(snorkel);
 
-  // arms — pivot groups at shoulders so they can swing
+  // arms/legs — pivot groups (under `lean`) so they can swing
   const mkLimb = (x, y, r, len, col) => {
-    const pivot = new THREE.Group(); pivot.position.set(x, y, 0);
+    const pivot = new THREE.Group(); pivot.position.set(x, Y(y), 0);
     const limb = capsule(r, len, col); limb.position.y = -(len / 2 + r * 0.4); pivot.add(limb);
-    g.add(pivot); return pivot;
+    lean.add(pivot); return pivot;
   };
   const shL = mkLimb(-0.42, 1.32, 0.13, 0.5, color);
   const shR = mkLimb(0.42, 1.32, 0.13, 0.5, color);
@@ -63,6 +70,7 @@ export function makeDiver(color = 0x2ec4ff) {
   }
 
   g.userData.parts = { torso, head, shL, shR, hipL, hipR };
+  g.userData.lean = lean; // swim/walk lean is applied here, not on the root group
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return g;
 }
@@ -405,5 +413,35 @@ export function makeCar(color = 0xffd166) {
     hub.rotation.x = Math.PI / 2; hub.position.set(x, 0.42, z); g.add(hub);
   }
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+
+// LUXURY CAR — the level-6 ending prize. Bigger, glossier and clearly fancier than the
+// garage cars: chrome trim, rear spoiler, gold rims, a roof beacon + an emissive "light
+// beam" column so the panicking player can spot it while fleeing the tsunami.
+export function makeLuxuryCar(color = 0xffd166) {
+  const g = new THREE.Group();
+  const glossy = (c) => mat(c, false, { metalness: 0.85, roughness: 0.12 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.7, 1.9), glossy(color)); body.position.y = 0.75; g.add(body);
+  const lower = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.4, 2.0), glossy(0x222831)); lower.position.y = 0.45; g.add(lower);
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.35, 1.8), glossy(color)); hood.position.set(1.5, 1.05, 0); g.add(hood);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(2, 0.7, 1.6), glossy(0x10151c)); cabin.position.set(-0.4, 1.35, 0); g.add(cabin);
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(2.02, 0.6, 1.4), mat(0x9fe3ff, false, { metalness: 0.6, roughness: 0.05, emissive: 0x112233 })); glass.position.set(-0.4, 1.35, 0); g.add(glass);
+  for (const z of [-0.96, 0.96]) { const chrome = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.12, 0.06), mat(0xeaeaea, false, { metalness: 0.95, roughness: 0.05 })); chrome.position.set(0, 0.78, z); g.add(chrome); }
+  const spoilerBar = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 1.8), glossy(0x222831)); spoilerBar.position.set(-2.0, 1.1, 0); g.add(spoilerBar);
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.1, 2.0), glossy(0x111111)); wing.position.set(-2.1, 1.35, 0); g.add(wing);
+  for (const z of [-0.6, 0.6]) { const hl = new THREE.Mesh(new THREE.CircleGeometry(0.18, 10), mat(0xffffff, false, { emissive: 0xffffcc, emissiveIntensity: 1 })); hl.position.set(2.96, 0.8, z); hl.rotation.y = Math.PI / 2; g.add(hl); }
+  for (const z of [-0.7, 0.7]) { const tl = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.25, 0.4), mat(0xff3030, false, { emissive: 0x661010 })); tl.position.set(-2.7, 0.85, z); g.add(tl); }
+  const wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.36, 14);
+  for (const [x, z] of [[1.5, 0.95], [1.5, -0.95], [-1.5, 0.95], [-1.5, -0.95]]) {
+    const w = new THREE.Mesh(wheelGeo, mat(0x0a0a0a, false)); w.rotation.x = Math.PI / 2; w.position.set(x, 0.5, z); g.add(w);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.38, 8), mat(0xffd166, false, { metalness: 0.95, roughness: 0.1, emissive: 0x4a3500 })); rim.rotation.x = Math.PI / 2; rim.position.set(x, 0.5, z); g.add(rim);
+  }
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.25, 10, 8), mat(0xfff2b0, false, { emissive: 0xffcc33, emissiveIntensity: 1 })); beacon.position.set(-0.4, 1.8, 0); g.add(beacon);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 1.4, 16, 12, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }));
+  beam.position.set(-0.4, 9.5, 0); g.add(beam);
+  g.userData.beam = beam; g.userData.beacon = beacon;
+  g.traverse((o) => { if (o.isMesh && o !== beam) o.castShadow = true; });
   return g;
 }

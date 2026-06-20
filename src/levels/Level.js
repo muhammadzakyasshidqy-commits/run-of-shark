@@ -3,7 +3,7 @@
 // Boss levels and the final tsunami level are handled here too.
 import * as THREE from 'three';
 import { WORLD } from '../config.js';
-import { makeCoin, makeTreasure, makeCoral, makeBoat, makeSubmarine, makeShip, makeCar, makeHazard, makeDock } from '../entities/Models.js';
+import { makeCoin, makeTreasure, makeCoral, makeBoat, makeSubmarine, makeShip, makeCar, makeLuxuryCar, makeHazard, makeDock } from '../entities/Models.js';
 import { Shark } from '../entities/Shark.js';
 import { BossController } from '../bosses/BossController.js';
 
@@ -100,9 +100,9 @@ export class Level {
       this.coins.push(m);
     }
 
-    // Boss level: spawn the goal car for final level
+    // Level 6 final prize: the special LUXURY CAR (with light beam) in place of the sub
     if (this.def.id === 6) {
-      this.car = makeCar(0xffd166);
+      this.car = makeLuxuryCar(0xffd166);
       this.car.position.copy(this.submarine.position);
       this.car.position.y = 0.2;
       this.submarine.visible = false;

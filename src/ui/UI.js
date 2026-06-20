@@ -50,7 +50,11 @@ export class UI {
   }
   returnToHub() { this.clear(); this.showHud(true); this.game.enterHub(); }
   _openHubPanel(panel) {
-    const map = { bank: () => this.showBank(), shop: () => this.showShop(), garage: () => this.showGarage(), wheel: () => this.showWheel(), levels: () => this.showLevels() };
+    // Each physical zone opens ONE category (no tab bar). Vehicles live only in the garage.
+    const map = {
+      bank: () => this.showBank(), garage: () => this.showGarage(), wheel: () => this.showWheel(), levels: () => this.showLevels(),
+      skins: () => this.showShop('skins', true), accessories: () => this.showShop('accessories', true), upgrades: () => this.showShop('upgrades', true),
+    };
     this.showHud(false);
     (map[panel] || (() => this.returnToHub()))();
   }
@@ -338,19 +342,23 @@ export class UI {
   }
 
   // ---------- SHOP ----------
-  showShop(tab = 'upgrades') {
+  // `single` (from a hub kiosk) shows ONLY that category with no tab bar. Vehicles are
+  // never sold here — they live in the Garage. From the menu (non-single) tabs remain.
+  showShop(tab = 'upgrades', single = false) {
+    const titles = { upgrades: '⬆️ Upgrades', skins: '🎽 Skin Shop', accessories: '🧢 Gear Shop' };
     this.open(() => {
       const s = h('div', 'screen'); const card = h('div', 'card');
-      card.appendChild(h('h2', 'head', '🛒 Shop'));
-      const tabs = h('div', 'row');
-      [['upgrades', 'Upgrades'], ['skins', 'Skins'], ['accessories', 'Accessories'], ['vehicles', 'Vehicles']].forEach(([k, l]) =>
-        tabs.appendChild(this.btn(l, `small ${tab === k ? 'green' : 'ghost'}`, () => this.showShop(k))));
-      card.appendChild(tabs);
+      card.appendChild(h('h2', 'head', single ? (titles[tab] || '🛒 Shop') : '🛒 Shop'));
+      if (!single) {
+        const tabs = h('div', 'row');
+        [['upgrades', 'Upgrades'], ['skins', 'Skins'], ['accessories', 'Accessories']].forEach(([k, l]) =>
+          tabs.appendChild(this.btn(l, `small ${tab === k ? 'green' : 'ghost'}`, () => this.showShop(k))));
+        card.appendChild(tabs);
+      }
       const list = h('div', 'list');
-      if (tab === 'upgrades') this._upgradeList(list);
-      else if (tab === 'skins') this._cosmeticList(list, SKINS, 'skin');
-      else if (tab === 'accessories') this._cosmeticList(list, ACCESSORIES, 'accessory');
-      else this._cosmeticList(list, VEHICLES, 'vehicle');
+      if (tab === 'upgrades') this._upgradeList(list, single);
+      else if (tab === 'skins') this._cosmeticList(list, SKINS, 'skin', single);
+      else this._cosmeticList(list, ACCESSORIES, 'accessory', single);
       card.appendChild(list);
       card.appendChild(h('div', 'chip coin-chip', `🪙 ${this.economy.s.coins}`));
       card.appendChild(this.back());
@@ -358,22 +366,24 @@ export class UI {
     });
   }
 
-  _upgradeList(list) {
+  _upgradeList(list, single = false) {
     Object.entries(UPGRADES).forEach(([key, def]) => {
       const lvl = this.economy.s.upgrades[key] || 0;
       const it = h('div', 'item');
       it.appendChild(h('div', null, `<div class="name">${def.icon} ${def.name}</div><div class="lvl">Lv ${lvl}/${def.max} → ${this.economy.statValue(key).toFixed(1)}</div>`));
       if (lvl >= def.max) it.appendChild(h('div', 'lvl', 'MAX'));
       else it.appendChild(this.btn(`🪙 ${this.economy.upgradeCost(key)}`, 'gold small', () => {
-        if (this.economy.buyUpgrade(key)) this.showShop('upgrades'); else this.toast('Not enough coins');
+        if (this.economy.buyUpgrade(key)) this.showShop('upgrades', single); else this.toast('Not enough coins');
       }));
       list.appendChild(it);
     });
   }
 
-  _cosmeticList(list, items, kind) {
+  _cosmeticList(list, items, kind, single = false) {
     const owned = kind === 'skin' ? this.economy.s.ownedSkins : kind === 'accessory' ? this.economy.s.ownedAccessories : this.economy.s.ownedVehicles;
     const equipped = kind === 'skin' ? this.economy.s.equippedSkin : kind === 'accessory' ? this.economy.s.equippedAccessory : null;
+    // Re-render the correct screen after an action (vehicles live in the Garage).
+    const rerender = () => kind === 'skin' ? this.showShop('skins', single) : kind === 'accessory' ? this.showShop('accessories', single) : this.showGarage();
     items.forEach((x) => {
       const have = owned.includes(x.id);
       const it = h('div', 'item');
@@ -381,19 +391,19 @@ export class UI {
       if (!have) {
         it.appendChild(this.btn('Buy', 'gold small', () => {
           const ok = kind === 'skin' ? this.economy.buySkin(x.id) : kind === 'accessory' ? this.economy.buyAccessory(x.id) : this.economy.buyVehicle(x.id);
-          if (ok) this.showShop(kind === 'skin' ? 'skins' : kind === 'accessory' ? 'accessories' : 'vehicles'); else this.toast('Not enough coins');
+          if (ok) rerender(); else this.toast('Not enough coins');
         }));
       } else if (kind === 'skin') {
         it.appendChild(this.btn(equipped === x.id ? '✓ Equipped' : 'Equip', `small ${equipped === x.id ? 'green' : ''}`, () => {
           this.economy.s.equippedSkin = x.id; this.save.markDirty();
           this.game.refreshPlayerAppearance(); // live skin change, no reload
-          this.showShop('skins');
+          rerender();
         }));
       } else if (kind === 'accessory') {
         it.appendChild(this.btn(equipped === x.id ? '✓' : 'Equip', `small ${equipped === x.id ? 'green' : ''}`, () => {
           this.economy.s.equippedAccessory = equipped === x.id ? null : x.id; this.save.markDirty();
           this.game.refreshPlayerAppearance(); // live accessory change, no reload
-          this.showShop('accessories');
+          rerender();
         }));
       } else it.appendChild(h('div', 'lvl', '✓'));
       list.appendChild(it);
@@ -494,11 +504,13 @@ export class UI {
       const result = h('div', 'subtitle', '&nbsp;');
       card.appendChild(this.btn('Spin (💎 1)', 'gold', () => {
         if (!this.economy.spendGems(1)) return this.toast('Need 1 gem (get gems from daily/wheel)');
+        this.game.hub?.spinWheel();      // spin the physical wheel in the world
         const prize = WHEEL_PRIZES[Math.floor(Math.random() * WHEEL_PRIZES.length)];
         prize.apply(this.economy); result.textContent = `🎉 ${prize.label}`;
       }));
       card.appendChild(this.btn('Free Spin (📺 Ad)', 'small', async () => {
         if (await this.ads.rewarded()) {
+          this.game.hub?.spinWheel();
           const prize = WHEEL_PRIZES[Math.floor(Math.random() * WHEEL_PRIZES.length)];
           prize.apply(this.economy); result.textContent = `🎉 ${prize.label}`;
         }

@@ -104,14 +104,74 @@ export function makeTower(highestUnlocked = 1) {
   return g;
 }
 
-// Simple static low-poly villager NPC (chunky, idle-bobbing handled by Hub).
-export function makeNPC(shirt = 0x4a90d9) {
+// A single themed kiosk (one stall) for a specific shop category.
+export function makeKiosk(label, awningColor, displayColor) {
+  const g = new THREE.Group();
+  const stall = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.6, 2.6), mat(0xe8dcc0)); stall.position.y = 1.3; g.add(stall);
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.5, 0.7), mat(0x8a5a2b)); counter.position.set(0, 1.1, 1.45); g.add(counter);
+  // striped awning
+  for (let i = 0; i < 5; i++) {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.18, 1.7), mat(i % 2 ? awningColor : 0xffffff));
+    stripe.position.set(-1.44 + i * 0.72, 2.7, 1.2); stripe.rotation.x = -0.32; g.add(stripe);
+  }
+  // a couple of "display goods" cubes representing the wares
+  for (let j = 0; j < 3; j++) { const d = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), mat(displayColor, false, { metalness: 0.2 })); d.position.set(-1 + j, 1.5, 1.45); g.add(d); }
+  const sign = makeSign(label, 4.2, '#10243a', '#ffd166'); sign.position.set(0, 3.5, 1.35); g.add(sign);
+  g.traverse((o) => { if (o.isMesh && !o.userData.isSign) o.castShadow = true; });
+  return g;
+}
+
+// Wheel of Fortune: a big vertical disc with coloured segments, a hub, a rim, a top
+// pointer, and a stand. userData.wheel = the spinning disc (Hub spins it).
+export function makeLuckyWheel(segments = 6) {
+  const g = new THREE.Group();
+  const R = 2.6;
+  const palette = [0xff6b6b, 0xffd166, 0x2ecc71, 0x2ec4ff, 0x9b59b6, 0xff9f43, 0xe84393, 0x1abc9c];
+  const wheel = new THREE.Group();
+  for (let i = 0; i < segments; i++) {
+    const seg = new THREE.Mesh(
+      new THREE.CircleGeometry(R, 16, (i / segments) * Math.PI * 2, (Math.PI * 2) / segments),
+      new THREE.MeshStandardMaterial({ color: palette[i % palette.length], flatShading: true, roughness: 0.6, side: THREE.DoubleSide })
+    );
+    wheel.add(seg);
+    // little prize dot near the rim of each segment
+    const ang = ((i + 0.5) / segments) * Math.PI * 2;
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), mat(0xffffff, false, { emissive: 0x333333 }));
+    dot.position.set(Math.cos(ang) * R * 0.7, Math.sin(ang) * R * 0.7, 0.06); wheel.add(dot);
+  }
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(R, 0.18, 8, 28), mat(0xffffff, false, { metalness: 0.3 })); wheel.add(rim);
+  const hubCap = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.3, 12), mat(0xffd166, false, { metalness: 0.6, emissive: 0x4a3500 }));
+  hubCap.rotation.x = Math.PI / 2; wheel.add(hubCap);
+  wheel.position.set(0, R + 1.4, 0); wheel.rotation.z = 0; g.add(wheel);
+
+  // stand: two angled legs + axle post
+  for (const s of [-1, 1]) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, R + 1.6, 6), mat(0x6b4a2c));
+    leg.position.set(s * 1.1, (R + 1.4) / 2, 0); leg.rotation.z = s * 0.32; g.add(leg);
+  }
+  const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.5, 8), mat(0x333333)); axle.rotation.x = Math.PI / 2; axle.position.set(0, R + 1.4, 0); g.add(axle);
+  // top pointer (triangle pointing down into the wheel)
+  const pointer = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.6, 4), mat(0xe74c3c, false, { emissive: 0x551111 }));
+  pointer.position.set(0, R + 1.4 + R + 0.1, 0); pointer.rotation.x = Math.PI; g.add(pointer);
+
+  g.userData.wheel = wheel;
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+
+// Simple static low-poly villager/shopkeeper NPC. shirt + hat colours vary so NPCs
+// across the island don't look like clones. Idle-bobbing handled by Hub.
+export function makeNPC(shirt = 0x4a90d9, hat = null) {
   const g = new THREE.Group();
   const skin = 0xffc9a3;
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.5, 3, 7), mat(shirt)); body.position.y = 0.95; g.add(body);
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), mat(skin, false)); head.position.y = 1.6; g.add(head);
   for (const s of [-1, 1]) { const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.4, 3, 6), mat(shirt)); arm.position.set(s * 0.36, 0.95, 0); g.add(arm); }
   for (const s of [-1, 1]) { const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.4, 3, 6), mat(0x34495e)); leg.position.set(s * 0.15, 0.4, 0); g.add(leg); }
+  if (hat != null) { // little cap so shopkeepers look distinct
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.18, 8), mat(hat)); cap.position.y = 1.86; g.add(cap);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.06, 8), mat(hat)); brim.position.set(0, 1.8, 0.12); g.add(brim);
+  }
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return g;
 }
