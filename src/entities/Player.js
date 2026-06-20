@@ -1,11 +1,12 @@
 // Player — movement, stamina/sprint, magnet radius. Driven by Input + Economy stats.
 import * as THREE from 'three';
-import { makeDiver } from './Models.js';
+import { makeDiver, makeAccessory } from './Models.js';
 import { WORLD } from '../config.js';
 
 export class Player {
   constructor(scene, economy, skinColor) {
     this.economy = economy;
+    this.scene = scene;
     this.mesh = makeDiver(skinColor);
     scene.add(this.mesh);
     this.pos = this.mesh.position;
@@ -17,12 +18,34 @@ export class Player {
     this.hp = 3 + Math.round(economy.statValue('resistance'));
     this.maxHp = this.hp;
     this._bob = 0;
+    this._phase = 0;
     this.invuln = 0;
+    this._accessory = null;
+    // Apply the equipped skin colour + accessory to the live mesh.
+    this.applyAppearance(skinColor, economy.s.equippedAccessory);
+  }
+
+  // Recolour the outfit + (re)attach the equipped accessory on the EXISTING mesh — no
+  // rebuild needed, so skin/accessory changes show instantly when called.
+  applyAppearance(skinColor, accessoryId) {
+    if (skinColor != null) {
+      this.mesh.traverse((o) => { if (o.isMesh && o.userData.outfit) o.material.color.setHex(skinColor); });
+    }
+    if (this._accessory) { this._accessory.parent?.remove(this._accessory); this._accessory = null; }
+    if (accessoryId) {
+      const a = makeAccessory(accessoryId);
+      if (a) {
+        const parts = this.mesh.userData.parts;
+        const host = (a.part === 'head' && parts?.head) ? parts.head : this.mesh;
+        host.add(a.obj);
+        this._accessory = a.obj;
+      }
+    }
   }
 
   get magnetRadius() { return this.economy.statValue('magnet'); }
 
-  update(dt, input) {
+  update(dt, input, mode = 'level') {
     const baseSpeed = this.economy.statValue('speed');
     const sprintMult = this.economy.statValue('sprint');
     let speed = baseSpeed;
@@ -53,7 +76,7 @@ export class Player {
     this._bob += dt * (input.len > 0.1 ? 10 : 3);
     this.mesh.position.y = 0.2 + Math.sin(this._bob) * 0.12;
 
-    this._animate(dt, input.len);
+    this._animate(dt, input.len, mode);
 
     if (this.invuln > 0) {
       this.invuln -= dt;
@@ -66,19 +89,39 @@ export class Player {
     }
   }
 
-  // Procedural walk/swim + idle limb animation (no skeletal rig needed).
-  _animate(dt, len) {
+  // Two distinct procedural animations (no skeletal rig):
+  //  - SWIM (mode 'level', in the ocean): body leans ~horizontal/prone, arms do a
+  //    front-crawl windmill, legs flutter-kick fast.
+  //  - WALK (mode 'hub', on land): upright, arms & legs swing in opposition.
+  _animate(dt, len, mode) {
     const parts = this.mesh.userData.parts;
     if (!parts) return;
     const moving = len > 0.1;
-    this._phase = (this._phase || 0) + dt * (moving ? 12 : 3);
-    const swing = Math.sin(this._phase) * (moving ? 0.7 : 0.12);
-    // arms & legs swing in opposition (a stroke / walk cycle)
-    parts.shL.rotation.x = swing; parts.shR.rotation.x = -swing;
-    parts.hipL.rotation.x = -swing * 0.8; parts.hipR.rotation.x = swing * 0.8;
-    // gentle torso/head breathing when idle
+    this.mesh.rotation.order = 'YXZ'; // yaw (heading) then local pitch (lean)
+
+    if (mode === 'level') {
+      // lean the whole body forward into a horizontal swim pose (more when moving)
+      const targetLean = moving ? -1.15 : -0.85;
+      this.mesh.rotation.x += (targetLean - this.mesh.rotation.x) * Math.min(1, dt * 5);
+      this._phase += dt * (moving ? 11 : 4);
+      // front-crawl: shoulders windmill in opposition, big sweep when moving
+      const amp = moving ? 1.6 : 0.35, bias = -0.4;
+      parts.shL.rotation.x = bias + Math.sin(this._phase) * amp;
+      parts.shR.rotation.x = bias + Math.sin(this._phase + Math.PI) * amp;
+      // flutter kick: small, fast, opposed
+      const kick = Math.sin(this._phase * 1.8) * (moving ? 0.5 : 0.14);
+      parts.hipL.rotation.x = kick; parts.hipR.rotation.x = -kick;
+      if (parts.torso) parts.torso.scale.y = 1 + Math.sin(this._phase * 0.5) * 0.02;
+    } else {
+      // upright walk cycle
+      this.mesh.rotation.x += (0 - this.mesh.rotation.x) * Math.min(1, dt * 5);
+      this._phase += dt * (moving ? 12 : 3);
+      const swing = Math.sin(this._phase) * (moving ? 0.7 : 0.12);
+      parts.shL.rotation.x = swing; parts.shR.rotation.x = -swing;
+      parts.hipL.rotation.x = -swing * 0.8; parts.hipR.rotation.x = swing * 0.8;
+      if (parts.torso) parts.torso.scale.y = 1 + Math.sin(this._phase * 0.5) * 0.03;
+    }
     if (parts.head) parts.head.rotation.z = Math.sin(this._phase * 0.5) * 0.05;
-    if (parts.torso) parts.torso.scale.y = 1 + Math.sin(this._phase * 0.5) * 0.03;
   }
 
   _setHitFlash(on) {

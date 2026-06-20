@@ -61,26 +61,27 @@ export const ACCESSORIES = [
   { id: 'crown',      name: 'Golden Crown',   cost: 2500 },
   { id: 'piratehat',  name: 'Pirate Hat',     cost: 900 },
   { id: 'milhelmet',  name: 'Military Helmet',cost: 1100 },
-  { id: 'jetpack',    name: 'Jetpack',        cost: 4000 },
+  { id: 'jetpack',    name: 'Jetpack',        cost: 2500 },
 ];
 
 export const VEHICLES = [
-  { id: 'atv',    name: 'ATV',        color: 0xe74c3c, cost: 1000 },
-  { id: 'buggy',  name: 'Buggy',      color: 0xf39c12, cost: 2500 },
-  { id: 'jeep',   name: 'Jeep',       color: 0x27ae60, cost: 5000 },
-  { id: 'sports', name: 'Sports Car', color: 0x2980b9, cost: 12000 },
-  { id: 'luxury', name: 'Luxury Car', color: 0xffd166, cost: 30000 },
+  { id: 'atv',    name: 'ATV',        color: 0xe74c3c, cost: 700 },
+  { id: 'buggy',  name: 'Buggy',      color: 0xf39c12, cost: 1800 },
+  { id: 'jeep',   name: 'Jeep',       color: 0x27ae60, cost: 4000 },
+  { id: 'sports', name: 'Sports Car', color: 0x2980b9, cost: 9000 },
+  { id: 'luxury', name: 'Luxury Car', color: 0xffd166, cost: 18000 },
 ];
 
+// Each achievement now pays a one-time reward (scaled by difficulty) when unlocked.
 export const ACHIEVEMENTS = [
-  { id: 'first_escape', name: 'First Escape',  test: (s) => s.levelsCleared >= 1 },
-  { id: 'coins_100',    name: '100 Coins',     test: (s) => s.totalCoins >= 100 },
-  { id: 'coins_1000',   name: '1000 Coins',    test: (s) => s.totalCoins >= 1000 },
-  { id: 'first_boss',   name: 'First Boss',    test: (s) => s.bossesBeaten >= 1 },
-  { id: 'complete',     name: 'Complete Game', test: (s) => s.levelsCleared >= 6 },
-  { id: 'max_speed',    name: 'Max Speed',     test: (s) => (s.upgrades?.speed || 0) >= UPGRADES.speed.max },
-  { id: 'max_bank',     name: 'Max Bank',      test: (s) => s.bankLevel >= 5 },
-  { id: 'all_skins',    name: 'All Skins',     test: (s) => (s.ownedSkins?.length || 0) >= SKINS.length },
+  { id: 'first_escape', name: 'First Escape',  test: (s) => s.levelsCleared >= 1,  reward: { coins: 100 } },
+  { id: 'coins_100',    name: '100 Coins',     test: (s) => s.totalCoins >= 100,   reward: { coins: 60 } },
+  { id: 'coins_1000',   name: '1000 Coins',    test: (s) => s.totalCoins >= 1000,  reward: { coins: 300 } },
+  { id: 'first_boss',   name: 'First Boss',    test: (s) => s.bossesBeaten >= 1,   reward: { coins: 250, gems: 1 } },
+  { id: 'complete',     name: 'Complete Game', test: (s) => s.levelsCleared >= 6,  reward: { coins: 1000, gems: 5 } },
+  { id: 'max_speed',    name: 'Max Speed',     test: (s) => (s.upgrades?.speed || 0) >= UPGRADES.speed.max, reward: { coins: 250 } },
+  { id: 'max_bank',     name: 'Max Bank',      test: (s) => s.bankLevel >= 5,      reward: { coins: 300 } },
+  { id: 'all_skins',    name: 'All Skins',     test: (s) => (s.ownedSkins?.length || 0) >= SKINS.length, reward: { coins: 500, gems: 3 } },
 ];
 
 export const WHEEL_PRIZES = [

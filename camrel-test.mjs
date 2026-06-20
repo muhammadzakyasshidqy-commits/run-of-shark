@@ -1,50 +1,55 @@
-// Browser integration test for the camera-relative LAYER + manual orbit drag.
+// Camera system (simplified): proves the ONE behaviour —
+//  (a) camera-relative movement: joystick "forward" goes along the camera's facing,
+//  (b) automatic chase camera: it ends up behind the heading for any direction.
+// (Drag-to-look and Classic mode were removed; no longer tested.)
 import { chromium } from 'playwright';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const b = await chromium.launch();
-const p = await b.newPage({ viewport: { width: 1000, height: 700 } });
+const p = await b.newPage();
 await p.goto('http://localhost:5173/', { waitUntil: 'networkidle' });
 await sleep(500);
 
-// Helper: start level, set mode + camYaw, feed a constant "forward" input, measure motion.
-const moveUnder = async (mode, yaw) => p.evaluate(async ({ mode, yaw }) => {
+// (a) camera-relative movement under a fixed camera yaw
+const moveAtYaw = (yaw) => p.evaluate(async (yaw) => {
   const g = window.__ROS.game;
   g.startLevel(0); g.cinematic = null; g.controlLocked = false; g.paused = false; g.running = true;
-  g.save.data.settings.camMode = mode;
-  g.camYaw = yaw; g._dragging = false; g._dragCooldown = 0;
-  g.player.invuln = 1e9;
+  g.camYaw = yaw; g.player.invuln = 1e9;
   const orig = g.input.read.bind(g.input);
-  g.input.read = () => ({ x: 0, z: 1, len: 1, sprint: false }); // stick "forward"
+  g.input.read = () => ({ x: 0, z: 1, len: 1, sprint: false }); // hold "forward"
   const p0 = { x: g.player.pos.x, z: g.player.pos.z };
-  await new Promise((r) => setTimeout(r, 500));
+  await new Promise((r) => setTimeout(r, 450));
   const p1 = { x: g.player.pos.x, z: g.player.pos.z };
   g.input.read = orig;
-  return { dx: +(p1.x - p0.x).toFixed(2), dz: +(p1.z - p0.z).toFixed(2) };
-}, { mode, yaw });
+  // expected world dir for "forward" at this yaw = camForward = (sin yaw, cos yaw)
+  const dx = p1.x - p0.x, dz = p1.z - p0.z, d = Math.hypot(dx, dz) || 1;
+  const dot = (dx / d) * Math.sin(yaw) + (dz / d) * Math.cos(yaw);
+  return { errDeg: +(Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI).toFixed(1) };
+}, yaw);
 
-const out = {};
-// Camera-relative: yaw 0 -> forward goes +Z ; yaw 90deg -> forward goes +X
-out.camRel_yaw0 = await moveUnder('camera', 0);
-out.camRel_yaw90 = await moveUnder('camera', Math.PI / 2);
-out.camRel_yawNeg90 = await moveUnder('camera', -Math.PI / 2);
-// Classic: passthrough world-fixed -> forward always +Z regardless of yaw
-out.classic_yaw90 = await moveUnder('classic', Math.PI / 2);
-
-// Manual orbit drag: real mouse drag on the canvas should change yaw + clamp pitch.
-out.drag = await p.evaluate(() => ({ before: { yaw: +window.__ROS.game.camYaw.toFixed(3), pitch: +window.__ROS.game.camPitch.toFixed(3) } }));
-await p.evaluate(() => {
-  const g = window.__ROS.game; g.startLevel(0); g.running = true; g.paused = false; g.camYaw = 0; g.camPitch = 0.66;
-  g.save.data.settings.camMode = 'camera'; // yaw-drag only active in camera mode
-  document.getElementById('ui-root').style.display = 'none'; // real game clears the menu via UI.startLevel; we bypassed it
+// (b) auto chase camera ends behind the movement heading
+const behind = await p.evaluate(() => {
+  const g = window.__ROS.game;
+  g.startLevel(0); g.cinematic = null; g.controlLocked = false; g.paused = true;
+  const out = {};
+  for (const [name, yaw] of Object.entries({ '+Z': 0, '+X': Math.PI / 2, '-Z': Math.PI, '-X': -Math.PI / 2 })) {
+    g.camYaw = yaw - 0.6; g.player.pos.set(0, 0.2, 0);
+    const mv = { x: Math.sin(yaw), z: Math.cos(yaw), len: 1 };
+    for (let i = 0; i < 180; i++) g._updateCamera(1 / 60, mv);
+    const cp = g.camera.position, fwd = [Math.sin(yaw), Math.cos(yaw)];
+    const bx = g.player.pos.x - cp.x, bz = g.player.pos.z - cp.z, bl = Math.hypot(bx, bz);
+    const dot = (bx / bl) * fwd[0] + (bz / bl) * fwd[1];
+    out[name] = +(Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI).toFixed(1);
+  }
+  return out;
 });
-const box = await p.$eval('#game-canvas', (el) => { const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
-await p.mouse.move(box.x, box.y);
-await p.mouse.down();
-await p.mouse.move(box.x + 160, box.y + 400, { steps: 10 }); // drag right + far down (test pitch clamp)
-await p.mouse.up();
-await sleep(50);
-out.dragAfter = await p.evaluate(() => ({ yaw: +window.__ROS.game.camYaw.toFixed(3), pitch: +window.__ROS.game.camPitch.toFixed(3), max: window.__ROS.game.camMaxPitch }));
 
+const out = {
+  camRel_yaw0: await moveAtYaw(0),
+  camRel_yaw90: await moveAtYaw(Math.PI / 2),
+  camRel_yawNeg90: await moveAtYaw(-Math.PI / 2),
+  autoChaseBehindDeg: behind,
+  noDragHandler: await p.evaluate(() => typeof window.__ROS.game._initCameraControls === 'undefined'),
+};
 console.log('===CAMREL_TEST_JSON===');
 console.log(JSON.stringify(out, null, 2));
 await b.close();

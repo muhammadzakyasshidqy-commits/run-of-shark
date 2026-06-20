@@ -24,13 +24,9 @@ const DEFAULT_SAVE = {
   achievements: [],
   dailyStreak: 0,
   lastDaily: 0,
-  settings: {
-    music: true, sfx: true, volume: 0.8,
-    joySensitivity: 1, invertY: false,
-    camMode: 'camera',        // 'camera' (Roblox-style, default) | 'classic' (world-fixed)
-    camSensitivity: 1,        // mouse-look / drag speed
-    camInvertY: false,        // invert vertical look (separate from movement invertY)
-  },
+  // joySensitivity + invertY apply to the movement joystick (kept). The camera is fully
+  // automatic now, so there are no manual camera settings.
+  settings: { music: true, sfx: true, volume: 0.8, joySensitivity: 1, invertY: false },
 };
 
 export class SaveManager {

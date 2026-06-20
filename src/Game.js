@@ -27,16 +27,13 @@ export class Game {
     this.scene.fog = new THREE.Fog(0x0a3d62, 60, 180);
 
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 500);
-    // Orbit chase-cam: spherical (yaw + pitch) around the player. Defaults reproduce
-    // the old framing (~18 behind / ~14 up).
+    // Fully-automatic chase cam: always smooth-follows behind the player's heading.
+    // No manual look/zoom — one joystick is all the player touches.
     this.camAhead = 6;
     this.camRadius = 22;          // 3D distance player->camera
     this.camBaseY = 1;
-    this.camYaw = 0;              // horizontal orbit angle
-    this.camPitch = 0.66;         // elevation (clamped); ~14 up at radius 22
-    this.camMinPitch = 0.22; this.camMaxPitch = 1.30;
-    this.camMinRadius = 12; this.camMaxRadius = 34;
-    this._dragging = false; this._dragId = null; this._dragCooldown = 0;
+    this.camYaw = 0;              // auto-followed heading
+    this.camPitch = 0.66;         // fixed elevation (~14 up at radius 22)
     this._camPos = new THREE.Vector3();
 
     this._buildEnvironment();
@@ -60,7 +57,6 @@ export class Game {
     this.onCine = () => {};     // ({title, sub}) or null — UI shows/hides the cinematic banner
 
     this._initDebug();
-    this._initCameraControls();
     this._resize();
     window.addEventListener('resize', () => this._resize());
     this._loop = this._loop.bind(this);
@@ -323,6 +319,11 @@ export class Game {
     return map[skin] || 0x2ec4ff;
   }
 
+  // Live-apply equipped skin colour + accessory to the standing player (no scene reload).
+  refreshPlayerAppearance() {
+    if (this.player) this.player.applyAppearance(this._skinColor(), this.save.data.equippedAccessory);
+  }
+
   disposeLevel() {
     if (this.level) { this.level.dispose(); this.level = null; }
     if (this.hub) { this.hub.dispose(); this.hub = null; }
@@ -368,15 +369,14 @@ export class Game {
 
     if (this.running && !this.paused && this.player && (this.level || this.hub)) {
       const raw = this.controlLocked ? { x: 0, z: 0, len: 0, sprint: false } : this.input.read();
-      // Camera-relative LAYER: rotate the world-fixed input by the camera yaw so
-      // "forward" follows where the camera looks. Classic mode = passthrough (yaw 0 effect).
-      const camMode = this.save.data.settings.camMode ?? 'camera';
+      // Camera-relative movement: rotate the world-fixed joystick input by the AUTO camera
+      // yaw so "up = forward toward the camera view". Single behaviour, no mode switch.
       let mv = raw;
-      if (camMode === 'camera' && raw.len > 0) {
+      if (raw.len > 0) {
         const r = rotateInput(raw.x, raw.z, this.camYaw);
         mv = { x: r.x, z: r.z, len: raw.len, sprint: raw.sprint };
       }
-      this.player.update(dt, mv);
+      this.player.update(dt, mv, this.mode);
       this._updateCamera(dt, mv);
 
       if (this.hub) {
@@ -413,55 +413,17 @@ export class Game {
     return a + d * t;
   }
 
-  // Player-controlled orbit handlers: drag to look (mouse/touch on the canvas), wheel to zoom.
-  // Listeners live on the canvas, so DOM UI (joystick, sprint, pause, menus) — which sits
-  // above the canvas — intercepts its own events and never conflicts with camera drag.
-  _initCameraControls() {
-    const c = this.canvas;
-    c.addEventListener('pointerdown', (e) => {
-      if (!this.running || this.paused || this.controlLocked) return;
-      this._dragging = true; this._dragId = e.pointerId;
-      this._lastX = e.clientX; this._lastY = e.clientY;
-    });
-    c.addEventListener('pointermove', (e) => {
-      if (!this._dragging || e.pointerId !== this._dragId) return;
-      const dx = e.clientX - this._lastX, dy = e.clientY - this._lastY;
-      this._lastX = e.clientX; this._lastY = e.clientY;
-      const s = (this.save.data.settings.camSensitivity ?? 1) * 0.005;
-      const invY = this.save.data.settings.camInvertY ? -1 : 1;
-      // Classic mode keeps a FIXED world-aligned facing (no yaw orbit) so world-fixed
-      // controls always match the view; only Camera mode allows free yaw look.
-      if ((this.save.data.settings.camMode ?? 'camera') === 'camera') this.camYaw -= dx * s;
-      this.camPitch = Math.max(this.camMinPitch, Math.min(this.camMaxPitch, this.camPitch + dy * s * invY));
-      this._dragCooldown = 1.2;                               // hold this angle before auto-recenter
-    });
-    const end = (e) => { if (e.pointerId === this._dragId) { this._dragging = false; this._dragId = null; } };
-    window.addEventListener('pointerup', end);
-    window.addEventListener('pointercancel', end);
-    c.addEventListener('wheel', (e) => {
-      this.camRadius = Math.max(this.camMinRadius, Math.min(this.camMaxRadius, this.camRadius + Math.sign(e.deltaY) * 2));
-      e.preventDefault();
-    }, { passive: false });
-  }
-
-  // Third-person ORBIT cam. Orientation is player-controlled (drag), with optional gentle
-  // auto-recenter toward the movement heading when moving FORWARD and not dragging
-  // (the forward-only gate avoids a strafe<->facing feedback spin in camera-relative mode).
+  // The ONE camera behaviour: smoothly auto-recenter behind the player's movement
+  // heading (forward-only gate keeps it from spinning on pure-sideways input). No drag,
+  // no zoom, no modes — the camera does its job so the player only touches the joystick.
   _updateCamera(dt, mv) {
     const tp = this.player.pos;
-    if (this._dragCooldown > 0) this._dragCooldown -= dt;
     const moving = mv && mv.len > 0.12;
-    const classic = (this.save.data.settings.camMode ?? 'camera') === 'classic';
-    if (classic) {
-      // CLASSIC: fixed world-aligned camera (always behind +Z). No auto-rotate on turns,
-      // so "up on the stick = up on screen" stays consistent. Drag yaw is disabled above.
-      this.camYaw = this._lerpAngle(this.camYaw, 0, Math.min(1, dt * 5));
-    } else if (!this._dragging && this._dragCooldown <= 0 && moving) {
-      // CAMERA: gentle auto-recenter behind the movement heading (forward-only -> no spin).
+    if (moving) {
       const cf = [Math.sin(this.camYaw), Math.cos(this.camYaw)];
       const ml = Math.hypot(mv.x, mv.z) || 1;
       const fdot = (mv.x / ml) * cf[0] + (mv.z / ml) * cf[1];
-      if (fdot > 0.35) this.camYaw = this._lerpAngle(this.camYaw, Math.atan2(mv.x, mv.z), Math.min(1, dt * 2));
+      if (fdot > 0.35) this.camYaw = this._lerpAngle(this.camYaw, Math.atan2(mv.x, mv.z), Math.min(1, dt * 2.5));
     }
     const cp = Math.cos(this.camPitch), sp = Math.sin(this.camPitch);
     const fx = Math.sin(this.camYaw), fz = Math.cos(this.camYaw);

@@ -92,13 +92,24 @@ export class Economy {
   }
 
   // --- achievements ---
+  // Pays each achievement's one-time reward on unlock. Guarded against re-entry because
+  // applying coins/gems triggers notify() -> checkAchievements() again.
   checkAchievements() {
+    if (this._checkingAch) return;
+    this._checkingAch = true;
+    let rewarded = false;
     for (const a of ACHIEVEMENTS) {
       if (this.s.achievements.includes(a.id)) continue;
       if (a.test(this.s)) {
         this.s.achievements.push(a.id);
+        if (a.reward) {
+          if (a.reward.coins) { this.s.coins += a.reward.coins; this.s.totalCoins += a.reward.coins; rewarded = true; }
+          if (a.reward.gems) { this.s.gems += a.reward.gems; rewarded = true; }
+        }
         this.onAchievement(a);
       }
     }
+    this._checkingAch = false;
+    if (rewarded) { this.save.markDirty(); this.onChange(); }
   }
 }

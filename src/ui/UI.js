@@ -42,9 +42,9 @@ export class UI {
     this.audio.unlock();
     this.fade(true, () => { this.game.enterHub(); this.fade(false); });
     if (!matchMedia('(hover: none), (pointer: coarse)').matches) {
-      setTimeout(() => this.toast('⌨ WASD move · drag mouse to look · walk into a building'), 700);
+      setTimeout(() => this.toast('⌨ WASD / Arrows to move · walk into a building to enter'), 700);
     } else {
-      setTimeout(() => this.toast('Joystick to move · drag right side to look'), 700);
+      setTimeout(() => this.toast('Joystick to move · walk into a building to enter'), 700);
     }
   }
   returnToHub() { this.clear(); this.showHud(true); this.game.enterHub(); }
@@ -206,9 +206,21 @@ export class UI {
   }
 
   // ---------- WIN / LOSE ----------
+  // Win reward = base(scales with level) + boss/tsunami + performance bonuses (no-damage, speedy).
+  _levelReward(i) {
+    const lv = LEVELS[i], g = this.game, parts = [];
+    let reward = 100 + lv.id * 50; parts.push(`Clear +${100 + lv.id * 50}`);
+    if (lv.boss) { reward += 150; parts.push('Boss +150'); }
+    if (lv.tsunami) { reward += 100; parts.push('Tsunami +100'); }
+    if (g.player && g.player.hp >= g.player.maxHp) { reward += 75; parts.push('No-damage +75'); }
+    const t = g.level ? g.level.elapsed : 999;
+    if (t > 0 && t < 40) { reward += 50; parts.push('Speedy +50'); }
+    return { reward, parts };
+  }
+
   _win(i) {
     const lv = LEVELS[i];
-    const reward = 50 + i * 40;
+    const { reward, parts } = this._levelReward(i);
     this.economy.addCoins(reward);
     const sd = this.save.data;
     sd.levelsCleared = Math.max(sd.levelsCleared, lv.id);
@@ -223,12 +235,12 @@ export class UI {
     this.open(() => {
       const s = h('div', 'screen'); const card = h('div', 'card');
       card.appendChild(h('div', 'title', 'ESCAPED!'));
-      card.appendChild(h('div', 'subtitle', `Level ${lv.id} complete — +${reward} 🪙`));
+      card.appendChild(h('div', 'subtitle', `Level ${lv.id} complete — <b>+${reward} 🪙</b>`));
+      card.appendChild(h('div', 'muted', parts.join(' · ')));
       const r = h('div', 'row');
       r.appendChild(this.btn('Next ▶', 'green', () => this.startLevel(Math.min(i + 1, LEVELS.length - 1))));
       r.appendChild(this.btn('🏝️ Island', 'small', () => this.returnToHub()));
       card.appendChild(r);
-      // reward ad
       card.appendChild(h('div', 'row', ''));
       card.appendChild(this.btn('📺 Watch Ad → 2x Coins', 'gold small', async () => {
         if (await this.ads.rewarded()) { this.economy.addCoins(reward); this.toast(`+${reward} bonus coins!`); }
@@ -334,11 +346,15 @@ export class UI {
         }));
       } else if (kind === 'skin') {
         it.appendChild(this.btn(equipped === x.id ? '✓ Equipped' : 'Equip', `small ${equipped === x.id ? 'green' : ''}`, () => {
-          this.economy.s.equippedSkin = x.id; this.save.markDirty(); this.showShop('skins');
+          this.economy.s.equippedSkin = x.id; this.save.markDirty();
+          this.game.refreshPlayerAppearance(); // live skin change, no reload
+          this.showShop('skins');
         }));
       } else if (kind === 'accessory') {
         it.appendChild(this.btn(equipped === x.id ? '✓' : 'Equip', `small ${equipped === x.id ? 'green' : ''}`, () => {
-          this.economy.s.equippedAccessory = equipped === x.id ? null : x.id; this.save.markDirty(); this.showShop('accessories');
+          this.economy.s.equippedAccessory = equipped === x.id ? null : x.id; this.save.markDirty();
+          this.game.refreshPlayerAppearance(); // live accessory change, no reload
+          this.showShop('accessories');
         }));
       } else it.appendChild(h('div', 'lvl', '✓'));
       list.appendChild(it);
@@ -498,35 +514,9 @@ export class UI {
       sensRow.appendChild(sensBtns);
       list.appendChild(sensRow);
 
-      // Invert Y toggle (movement)
+      // Invert Y toggle (movement joystick)
       list.appendChild(mk('↕️ Invert Y Axis (move)', 'invertY'));
-
-      // --- Camera controls ---
-      if (set.camMode == null) set.camMode = 'camera';
-      const modeRow = h('div', 'item');
-      modeRow.appendChild(h('div', null, `<div class="name">🎥 Control Mode</div><div class="lvl">${set.camMode === 'camera' ? 'Camera-Relative (Roblox-style)' : 'Classic (world-fixed)'}</div>`));
-      modeRow.appendChild(this.btn(set.camMode === 'camera' ? 'Camera' : 'Classic', `small ${set.camMode === 'camera' ? 'green' : 'ghost'}`, () => {
-        set.camMode = set.camMode === 'camera' ? 'classic' : 'camera'; this.save.markDirty(); this.showSettings();
-      }));
-      list.appendChild(modeRow);
-
-      // Camera (look) sensitivity
-      const CSENS = { Low: 0.6, Medium: 1.0, High: 1.6 };
-      if (set.camSensitivity == null) set.camSensitivity = 1;
-      const csRow = h('div', 'item');
-      csRow.appendChild(h('div', 'name', '🎥 Camera Sensitivity'));
-      const csBtns = h('div', 'row');
-      Object.entries(CSENS).forEach(([label, val]) => {
-        const active = Math.abs(set.camSensitivity - val) < 0.01;
-        csBtns.appendChild(this.btn(label, `small ${active ? 'green' : 'ghost'}`, () => {
-          set.camSensitivity = val; this.save.markDirty(); this.showSettings();
-        }));
-      });
-      csRow.appendChild(csBtns);
-      list.appendChild(csRow);
-
-      // Invert camera Y (look) — separate from movement invertY
-      list.appendChild(mk('↕️ Invert Camera Y (look)', 'camInvertY'));
+      // Camera is fully automatic — no camera settings to configure.
       card.appendChild(list);
 
       // Cloud login (guest by default). Magic-link flow; local save stays the fallback.

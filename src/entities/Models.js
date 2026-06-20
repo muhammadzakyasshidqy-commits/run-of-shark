@@ -19,8 +19,9 @@ export function makeDiver(color = 0x2ec4ff) {
   const g = new THREE.Group();
   const skinTone = 0xffc9a3;
 
-  // torso — short & stout (outfit colour)
+  // torso — short & stout (outfit colour). userData.outfit lets the skin be recoloured live.
   const torso = capsule(0.34, 0.45, color, 8);
+  torso.userData.outfit = true;
   torso.position.y = 1.02; torso.scale.set(1, 1, 0.8); g.add(torso);
   // chest stripe (lifejacket look)
   const vest = capsule(0.36, 0.2, 0xffffff, 8);
@@ -46,6 +47,7 @@ export function makeDiver(color = 0x2ec4ff) {
   };
   const shL = mkLimb(-0.42, 1.32, 0.13, 0.5, color);
   const shR = mkLimb(0.42, 1.32, 0.13, 0.5, color);
+  shL.children[0].userData.outfit = true; shR.children[0].userData.outfit = true; // sleeves = skin colour
   // hands
   for (const [pivot] of [[shL], [shR]]) {
     const hand = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), mat(skinTone, false));
@@ -63,6 +65,67 @@ export function makeDiver(color = 0x2ec4ff) {
   g.userData.parts = { torso, head, shL, shR, hipL, hipR };
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return g;
+}
+
+// Visual accessories attached to the diver. Returns { obj, part } where part is
+// 'head' (added as a child of the head mesh — follows head movement) or
+// 'body' (added to the main group — follows the body's bob/lean/turn).
+export function makeAccessory(id) {
+  const g = new THREE.Group();
+  let part = 'head';
+  switch (id) {
+    case 'sunglasses': {
+      part = 'head';
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.2, 0.1), mat(0x111111, false, { metalness: 0.4 }));
+      bar.position.set(0, 0.08, 0.4); g.add(bar);
+      for (const s of [-1, 1]) { const lens = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.18, 0.06), mat(0x223a2a, false, { metalness: 0.5 })); lens.position.set(s * 0.2, 0.08, 0.44); g.add(lens); }
+      break;
+    }
+    case 'helmet': { // diving helmet — clear dome + brass ring
+      part = 'head';
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.55, 14, 12), new THREE.MeshStandardMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.35, metalness: 0.3, roughness: 0.1 }));
+      g.add(dome);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.08, 8, 16), mat(0xd4af37, false, { metalness: 0.6 })); ring.rotation.x = Math.PI / 2; ring.position.y = -0.35; g.add(ring);
+      break;
+    }
+    case 'crown': {
+      part = 'head';
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.16, 10, 1, true), mat(0xffd166, false, { metalness: 0.7, emissive: 0x4a3500 })); band.position.y = 0.42; g.add(band);
+      for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; const spike = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.22, 4), mat(0xffd166, false, { metalness: 0.7, emissive: 0x4a3500 })); spike.position.set(Math.cos(a) * 0.4, 0.56, Math.sin(a) * 0.4); g.add(spike); }
+      break;
+    }
+    case 'piratehat': {
+      part = 'head';
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.08, 12), mat(0x2a1d12)); brim.position.y = 0.45; brim.scale.set(1, 1, 0.7); g.add(brim);
+      const top = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.4, 8), mat(0x1a120a)); top.position.y = 0.62; g.add(top);
+      const skull = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), mat(0xffffff, false)); skull.position.set(0, 0.5, 0.45); g.add(skull);
+      break;
+    }
+    case 'milhelmet': {
+      part = 'head';
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x4b5320)); dome.position.y = 0.34; g.add(dome);
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.06, 12), mat(0x3a4019)); brim.position.y = 0.32; g.add(brim);
+      break;
+    }
+    case 'backpack': {
+      part = 'body';
+      const pack = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.75, 0.32), mat(0xc0392b)); pack.position.set(0, 1.05, -0.4); g.add(pack);
+      const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.12), mat(0xe74c3c)); pocket.position.set(0, 0.95, -0.58); g.add(pocket);
+      break;
+    }
+    case 'jetpack': {
+      part = 'body';
+      for (const s of [-1, 1]) {
+        const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.8, 8), mat(0xbdc3c7, false, { metalness: 0.5 })); tank.position.set(s * 0.22, 1.05, -0.42); g.add(tank);
+        const nozzle = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.2, 8), mat(0x333333)); nozzle.position.set(s * 0.22, 0.58, -0.42); nozzle.rotation.x = Math.PI; g.add(nozzle);
+        const flame = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.3, 8), mat(0xff7043, false, { emissive: 0x662200 })); flame.position.set(s * 0.22, 0.4, -0.42); flame.rotation.x = Math.PI; g.add(flame);
+      }
+      break;
+    }
+    default: return null;
+  }
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return { obj: g, part };
 }
 
 // ---------------------------------------------------------------------------
