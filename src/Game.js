@@ -369,15 +369,30 @@ export class Game {
 
     if (this.running && !this.paused && this.player && (this.level || this.hub)) {
       const raw = this.controlLocked ? { x: 0, z: 0, len: 0, sprint: false } : this.input.read();
-      // Camera-relative movement: rotate the world-fixed joystick input by the AUTO camera
-      // yaw so "up = forward toward the camera view". Single behaviour, no mode switch.
+      // Camera-relative movement WITHOUT the old feedback spin.
+      // Why the old code spun: rotateInput(raw, camYaw) yields world heading (a + camYaw);
+      // the camera then chased that heading, so camYaw kept gaining 'a' every frame forever.
+      // (Camera-relative + auto-follow-heading + steady-stick can never settle — the +a offset
+      //  has no fixed point for a != 0.) Fix: SNAPSHOT a world heading relative to the camera
+      // only when the stick DIRECTION changes, then lock it while the stick is held. So it's
+      // still camera-relative (responds to where the camera looks at press time) but the held
+      // heading no longer depends on camYaw, so it stops drifting.
       let mv = raw;
       if (raw.len > 0) {
-        const r = rotateInput(raw.x, raw.z, this.camYaw);
-        mv = { x: r.x, z: r.z, len: raw.len, sprint: raw.sprint };
+        const rawAngle = Math.atan2(raw.x, raw.z);
+        if (this._committedHeading == null || this._lastRawAngle == null ||
+            Math.abs(this._angleDelta(this._lastRawAngle, rawAngle)) > 0.04) {
+          const r = rotateInput(raw.x, raw.z, this.camYaw); // camera-relative snapshot
+          this._committedHeading = Math.atan2(r.x, r.z);
+          this._lastRawAngle = rawAngle;
+        }
+        const ch = this._committedHeading;
+        mv = { x: Math.sin(ch) * raw.len, z: Math.cos(ch) * raw.len, len: raw.len, sprint: raw.sprint };
+      } else {
+        this._committedHeading = null; this._lastRawAngle = null; // re-snapshot on next press
       }
       this.player.update(dt, mv, this.mode);
-      this._updateCamera(dt, mv);
+      this._updateCamera(dt, raw.len > 0.12);
 
       if (this.hub) {
         const panel = this.hub.update(dt, this.player);
@@ -407,23 +422,25 @@ export class Game {
   }
 
   _lerpAngle(a, b, t) {
+    return a + this._angleDelta(a, b) * t;
+  }
+
+  _angleDelta(a, b) {
     let d = b - a;
     while (d > Math.PI) d -= Math.PI * 2;
     while (d < -Math.PI) d += Math.PI * 2;
-    return a + d * t;
+    return d;
   }
 
-  // The ONE camera behaviour: smoothly auto-recenter behind the player's movement
-  // heading (forward-only gate keeps it from spinning on pure-sideways input). No drag,
-  // no zoom, no modes — the camera does its job so the player only touches the joystick.
-  _updateCamera(dt, mv) {
+  // The ONE camera behaviour: smoothly trail behind the player's DECIDED heading
+  // (player.mesh.rotation.y — already smoothed inside Player.update). Chasing that stable
+  // value, not the freshly-rotated input, is what kills the old self-referential drift:
+  // with input held constant the player heading settles, so camYaw settles too. No drag,
+  // no zoom, no modes — the player only ever touches the joystick.
+  _updateCamera(dt, moving) {
     const tp = this.player.pos;
-    const moving = mv && mv.len > 0.12;
     if (moving) {
-      const cf = [Math.sin(this.camYaw), Math.cos(this.camYaw)];
-      const ml = Math.hypot(mv.x, mv.z) || 1;
-      const fdot = (mv.x / ml) * cf[0] + (mv.z / ml) * cf[1];
-      if (fdot > 0.35) this.camYaw = this._lerpAngle(this.camYaw, Math.atan2(mv.x, mv.z), Math.min(1, dt * 2.5));
+      this.camYaw = this._lerpAngle(this.camYaw, this.player.mesh.rotation.y, Math.min(1, dt * 2.5));
     }
     const cp = Math.cos(this.camPitch), sp = Math.sin(this.camPitch);
     const fx = Math.sin(this.camYaw), fz = Math.cos(this.camYaw);

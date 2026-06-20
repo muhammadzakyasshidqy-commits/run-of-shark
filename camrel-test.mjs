@@ -33,8 +33,8 @@ const behind = await p.evaluate(() => {
   const out = {};
   for (const [name, yaw] of Object.entries({ '+Z': 0, '+X': Math.PI / 2, '-Z': Math.PI, '-X': -Math.PI / 2 })) {
     g.camYaw = yaw - 0.6; g.player.pos.set(0, 0.2, 0);
-    const mv = { x: Math.sin(yaw), z: Math.cos(yaw), len: 1 };
-    for (let i = 0; i < 180; i++) g._updateCamera(1 / 60, mv);
+    g.player.mesh.rotation.y = yaw;                 // player faces this heading
+    for (let i = 0; i < 180; i++) g._updateCamera(1 / 60, true); // auto-chase behind heading
     const cp = g.camera.position, fwd = [Math.sin(yaw), Math.cos(yaw)];
     const bx = g.player.pos.x - cp.x, bz = g.player.pos.z - cp.z, bl = Math.hypot(bx, bz);
     const dot = (bx / bl) * fwd[0] + (bz / bl) * fwd[1];
