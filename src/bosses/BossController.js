@@ -40,6 +40,15 @@ export class BossController {
     this.onShake = () => {};    // (amount)
     this.onDefeated = () => {};
     this.onAttackTelegraph = () => {}; // (attackName)
+
+    // Telegraph aim-line: a glowing strip on the water showing WHERE the boss will go,
+    // so the player can read it and bait the boss into a rock. Hidden except during telegraph.
+    this.aimLine = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 0.08, 1),
+      new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0.55, depthWrite: false })
+    );
+    this.aimLine.visible = false; this.scene.add(this.aimLine);
+    this._highlit = null;
   }
 
   // Called by Game after the intro cutscene; hands control to the FSM.
@@ -55,9 +64,45 @@ export class BossController {
     return null;
   }
 
+  // Nearest hazard lying along `dir` from the boss (within a cone) — the one the attack
+  // would crash into. Used to telegraph the bait target. Returns hazard or null.
+  _hazardAlong(dir, maxDist = 80, minDot = 0.45) {
+    let best = null, bestD = Infinity;
+    for (const hz of this.hazards) {
+      const tx = hz.pos.x - this.boss.pos.x, tz = hz.pos.z - this.boss.pos.z;
+      const td = Math.hypot(tx, tz) || 1;
+      const dot = (tx / td) * dir.x + (tz / td) * dir.z;
+      if (dot > minDot && td < maxDist && td < bestD) { bestD = td; best = hz; }
+    }
+    return best;
+  }
+
+  // Show the aim strip from the boss along `dir` for `length`, and pulse-highlight the
+  // target hazard so the player sees exactly where to stand to bait the crash.
+  _showAim(dir, length, hz) {
+    const ang = Math.atan2(dir.x, dir.z);
+    this.aimLine.scale.set(2.4, 1, length);
+    this.aimLine.position.set(this.boss.pos.x + dir.x * length / 2, 0.25, this.boss.pos.z + dir.z * length / 2);
+    this.aimLine.rotation.y = ang;
+    this.aimLine.visible = true;
+    this._highlight(hz);
+  }
+
+  _hideAim() { this.aimLine.visible = false; this._highlight(null); }
+
+  _highlight(hz) {
+    if (this._highlit && this._highlit !== hz) {
+      this._highlit.mesh.traverse((o) => { if (o.isMesh && o.material && o.material.emissive) o.material.emissiveIntensity = 1; });
+      this._highlit.mesh.scale.setScalar(1);
+    }
+    this._highlit = hz || null;
+    if (hz) { hz.mesh.scale.setScalar(1.18); hz.mesh.traverse((o) => { if (o.isMesh && o.material && o.material.emissive) o.material.emissiveIntensity = 3; }); }
+  }
+
   _registerHit(hz) {
     if (this._hitThisMove) return;
     this._hitThisMove = true;
+    this._hideAim();
     const dead = this.boss.hitBy(); // decrements HP (cooldown-guarded)
     this.effects.ring(this.boss.pos, 0x06d6a0, 9, 0.5);
     this.effects.burst(this.boss.pos, 0xffd166, 18);
@@ -83,6 +128,7 @@ export class BossController {
   _startDefeat() {
     this.state = 'defeat';
     this.boss.setTelegraph(false);
+    this._hideAim();
     this._clearWave();
     this.defeated = true;
     this.onDefeated();
@@ -144,9 +190,18 @@ export class BossController {
     this.boss.mesh.scale.setScalar(this.boss.def.scale * (1 + Math.sin(this.timer * 25) * 0.04));
     this._faceTarget();
     if (this.timer <= this.telegraphTime - 0.05 && !this._tgRingDone) { this._tgRingDone = true; this.effects.ring(this.boss.pos, 0xffcc00, 3, this.telegraphTime); }
+    // Aim telegraph: charge/wave go FORWARD along lockDir; roar recoils BACKWARD. Highlight
+    // the rock the boss would crash into so the player knows where to lure it.
+    if (this.attack === 'roar') {
+      const back = { x: -this.lockDir.x, z: -this.lockDir.z };
+      this._showAim(back, 26, this._hazardAlong(back, 28, 0.2));
+    } else {
+      this._showAim(this.lockDir, this.attack === 'charge' ? 36 : 22, this._hazardAlong(this.lockDir, 80, 0.5));
+    }
     if (this.timer <= 0) {
       this._tgRingDone = false;
       this._hitThisMove = false;
+      this._hideAim();
       if (this.attack === 'charge') { this.state = 'charge'; this.timer = 2.2; this._chargeDist = 0; this.audio.charge(); }
       else if (this.attack === 'roar') { this.state = 'roar'; this.timer = 1.0; this._roarFired = false; this.audio.sharkRoar(); }
       else { this.state = 'wave'; this.timer = 2.0; this._spawnWave(); this._waveDamaged = false; }
@@ -195,7 +250,7 @@ export class BossController {
         const tx = hz.pos.x - this.boss.pos.x, tz = hz.pos.z - this.boss.pos.z;
         const td = Math.hypot(tx, tz) || 1;
         const dot = (tx / td) * back.x + (tz / td) * back.z; // alignment with the backward direction
-        if (dot > 0.25 && td < 24 && td < bestDist) { bestDist = td; best = { x: tx / td, z: tz / td }; }
+        if (dot > 0.15 && td < 30 && td < bestDist) { bestDist = td; best = { x: tx / td, z: tz / td }; }
       }
       this._roarDir = best || back; // snap toward a baited hazard, else straight back
     }
@@ -271,5 +326,5 @@ export class BossController {
     if (this.timer <= 0) { this.state = 'idle'; this.timer = this.idleTime; }
   }
 
-  dispose() { this._clearWave(); }
+  dispose() { this._clearWave(); if (this.aimLine) this.scene.remove(this.aimLine); }
 }
