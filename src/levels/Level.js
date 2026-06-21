@@ -74,19 +74,39 @@ export class Level {
       }
     }
 
-    // Corals (obstacles) — now SOLID. Collision radius (0.75) matches the visual footprint.
-    const coralCount = this.def.corals || 0;
-    for (let i = 0; i < coralCount; i++) {
-      const c = makeCoral(i + this.def.id);
-      // On split-route levels push corals into the RIGHT lane (the "slow but safe" path).
-      const x = this.def.splitRoute
-        ? 6 + Math.random() * (WORLD.size * 0.8)
-        : (Math.random() - 0.5) * WORLD.size * 1.6;
-      c.position.set(x, 0, -40 + Math.random() * (WORLD.size + 30));
-      c.rotation.y = Math.random() * Math.PI;
-      this.scene.add(c);
-      this.corals.push(c);
+    // Corals (obstacles) — now SOLID (collision r 0.75 ~ visual footprint).
+    const addCoral = (x, z, seed) => {
+      const c = makeCoral(seed); c.position.set(x, 0, z); c.rotation.y = Math.random() * Math.PI;
+      this.scene.add(c); this.corals.push(c);
       this.solids.push({ type: 'circle', pos: c.position, r: 0.75 });
+    };
+    if (this.def.maze) {
+      // CORAL MAZE (L3): serpentine reef WALLS across the lane, each with ONE gap that
+      // alternates side — weave through while chased. Walls are cheap box colliders (perf)
+      // dressed with a few coral clumps; this is L3's unique layout/mechanic, not scatter.
+      const rows = 6, halfW = 44, gapHalf = 5;
+      const wallMat = () => new THREE.MeshStandardMaterial({ color: 0xff7f6b, flatShading: true, roughness: 0.9 });
+      for (let r = 0; r < rows; r++) {
+        const z = -26 + r * 17;
+        const gapCenter = (r % 2 === 0 ? -1 : 1) * 18;               // alternate gap side
+        for (const seg of [[-halfW, gapCenter - gapHalf], [gapCenter + gapHalf, halfW]]) {
+          const x0 = seg[0], x1 = seg[1]; if (x1 - x0 < 1) continue;
+          const cx = (x0 + x1) / 2, hx = (x1 - x0) / 2;
+          const wall = new THREE.Mesh(new THREE.BoxGeometry(hx * 2, 2.4, 2.4), wallMat());
+          wall.position.set(cx, 1, z); wall.castShadow = true; wall.receiveShadow = true;
+          this.scene.add(wall); this.barriers.push(wall);
+          this.solids.push({ type: 'box', pos: { x: cx, z }, hx, hz: 1.2 });
+          // a few coral clumps perched on the wall for looks (sparse — perf-safe)
+          for (let k = 0; k < Math.min(4, Math.floor(hx / 6)); k++) addCoral(x0 + 3 + k * (hx * 2 / 4), z, r * 5 + k);
+        }
+      }
+    } else {
+      const coralCount = this.def.corals || 0;
+      for (let i = 0; i < coralCount; i++) {
+        // split-route levels push corals into the RIGHT lane (the "slow but safe" path)
+        const x = this.def.splitRoute ? 6 + Math.random() * (WORLD.size * 0.8) : (Math.random() - 0.5) * WORLD.size * 1.6;
+        addCoral(x, -40 + Math.random() * (WORLD.size + 30), i + this.def.id);
+      }
     }
 
     // Coins / treasures
