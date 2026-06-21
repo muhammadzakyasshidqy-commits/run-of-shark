@@ -51,13 +51,35 @@ export class UI {
   }
   returnToHub() { this.clear(); this.showHud(true); this.game.enterHub(); }
   _openHubPanel(panel) {
+    this.showHud(false);
+    if (panel && panel.startsWith('veh:')) return this.showVehicle(panel.slice(4)); // garage showroom car
     // Each physical zone opens ONE category (no tab bar). Vehicles live only in the garage.
     const map = {
-      bank: () => this.showBank(), garage: () => this.showGarage(), wheel: () => this.showWheel(), levels: () => this.showLevels(),
+      bank: () => this.showBank(), wheel: () => this.showWheel(), levels: () => this.showLevels(),
       skins: () => this.showShop('skins', true), accessories: () => this.showShop('accessories', true), upgrades: () => this.showShop('upgrades', true),
     };
-    this.showHud(false);
     (map[panel] || (() => this.returnToHub()))();
+  }
+
+  // Per-car panel shown when the player walks up to a showroom vehicle in the garage.
+  showVehicle(id) {
+    const v = VEHICLES.find((x) => x.id === id);
+    this.open(() => {
+      const s = h('div', 'screen'); const card = h('div', 'card');
+      const owned = this.economy.s.ownedVehicles.includes(id);
+      card.appendChild(h('h2', 'head', `🚗 ${v ? v.name : 'Vehicle'}`));
+      card.appendChild(h('div', 'subtitle', owned ? 'You own this vehicle.' : `Price: 🪙 ${v.cost}`));
+      card.appendChild(h('div', 'chip coin-chip', `🪙 ${this.economy.s.coins}`));
+      const r = h('div', 'row');
+      if (owned) r.appendChild(h('div', 'btn green small', '✓ Owned'));
+      else r.appendChild(this.btn(`Buy (🪙 ${v.cost})`, 'gold', () => {
+        if (this.economy.buyVehicle(id)) { this.game.hub?.markVehicleOwned(id); this.toast(`${v.name} bought!`); this.showVehicle(id); }
+        else this.toast('Not enough coins');
+      }));
+      card.appendChild(r);
+      card.appendChild(h('div', 'row', '')); card.appendChild(this.back());
+      s.appendChild(card); return s;
+    });
   }
   _closeHubPanel() { this.clear(); this.showHud(true); this.game.resumeHub(); }
 

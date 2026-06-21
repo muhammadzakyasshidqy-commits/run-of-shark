@@ -3,7 +3,8 @@
 // (showBank/showShop/showGarage/showLevels/showWheel) — only the way IN changed.
 import * as THREE from 'three';
 import { makeBank, makeGarage, makeTower, makeZoneMarker, makeNPC, makeSign, makeLuckyWheel, makeKiosk } from './buildings.js';
-import { makeDock, makeBoat } from '../entities/Models.js';
+import { makeDock, makeBoat, makeCar } from '../entities/Models.js';
+import { VEHICLES } from '../config.js';
 
 const CENTER = { x: 0, z: -12 };
 const ISLAND_R = 54;
@@ -67,10 +68,23 @@ export class Hub {
     const upgShop = makeKiosk('UPGRADES', 0x06d6a0, 0x2ecc71); this.add(upgShop, 40, 0, 12); this._solid(40, 12, 5.5);
     this._zone('upgradeshop', 'upgrades', 31, 12, 5, 0x06d6a0); this._npc(31, 16, 0x16a085, 0xffd166);
 
-    // GARAGE (back) — vehicles only — with a mechanic NPC out front
-    const garage = makeGarage(this.save.data.ownedVehicles || []); this.add(garage, 0, 0, -50);
-    this._zone('garage', 'garage', 0, -40, 6, 0xe74c3c); this._solid(0, -50, 7);
-    this._npc(-5, -42, 0x34495e, 0xe74c3c);  // mechanic (overalls + red rag)
+    // GARAGE SHOWROOM (front-left, accessible) — each vehicle is a PHYSICAL car you walk up
+    // to; standing by one opens a buy/own panel for THAT car (zone panel 'veh:<id>').
+    const gx = -34, gz = 30;                                   // showroom origin (front-left)
+    const canopy = makeGarage(this.save.data.ownedVehicles || []); // reuse as the open structure
+    this.add(canopy, gx + 10, 0, gz); canopy.scale.setScalar(1.1);
+    this.add(makeSign('GARAGE', 6, '#2c2c2c', '#ffffff'), gx + 10, 5.2, gz);
+    this._npc(gx + 18, gz + 3, 0x34495e, 0xe74c3c);            // mechanic
+    this.vehicleCars = {};
+    VEHICLES.forEach((v, i) => {
+      const owned = (this.save.data.ownedVehicles || []).includes(v.id);
+      const car = makeCar(v.color);
+      if (!owned) car.traverse((o) => { if (o.isMesh && o.material) { o.material.transparent = true; o.material.opacity = 0.5; o.material.color.setHex(0x6b7077); } });
+      const cx = gx + i * 5.2, cz = gz;
+      this.add(car, cx, 0.2, cz); car.rotation.y = Math.PI;
+      this.vehicleCars[v.id] = { car, color: v.color };
+      this._zone('veh:' + v.id, 'veh:' + v.id, cx, cz - 3, 2.6, owned ? 0x2ecc71 : 0xffd166);
+    });
 
     // Dock + wooden boat at the front — the clearly-labelled "start dive" point
     const dock = makeDock(16); this.add(dock, 0, 0, 30);
@@ -108,6 +122,16 @@ export class Hub {
   _npc(x, z, shirt, hat) {
     const npc = makeNPC(shirt, hat); npc.rotation.y = Math.random() * Math.PI * 2;
     this.add(npc, x, 0, z); this.npcs.push(npc);
+  }
+
+  // Recolour a showroom car to "owned" (full colour, opaque) after purchase.
+  markVehicleOwned(id) {
+    const entry = this.vehicleCars && this.vehicleCars[id];
+    if (!entry) return;
+    entry.car.traverse((o) => { if (o.isMesh && o.material) { o.material.transparent = false; o.material.opacity = 1; } });
+    // restore body colour on the main body meshes (leave tyres/glass as-is)
+    const body = entry.car.children.find((c) => c.isMesh);
+    if (body) body.material.color.setHex(entry.color);
   }
 
   // Spin the physical wheel so the TOP pointer lands on segment `index`, after several
