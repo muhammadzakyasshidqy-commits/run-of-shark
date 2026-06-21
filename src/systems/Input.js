@@ -20,6 +20,9 @@ export class Input {
     this._joyActive = false;
     this._joyId = null;
 
+    this._touchSeen = false;        // becomes true once any real touch occurs (hybrid devices)
+    this._mouseDrag = null;         // {ox, oy} for desktop pointer-drag-to-move
+
     window.addEventListener('keydown', (e) => {
       this.keys.add(e.key.toLowerCase());
       if (e.key === 'Shift') this.sprint = true;
@@ -28,8 +31,39 @@ export class Input {
       this.keys.delete(e.key.toLowerCase());
       if (e.key === 'Shift') this.sprint = false;
     });
+    window.addEventListener('touchstart', () => { if (!this._touchSeen) { this._touchSeen = true; if (this._touchWanted) this.setTouchVisible(true); } }, { passive: true, capture: true });
 
     this._buildTouch(uiRoot);
+    this._initMouseDrag();
+  }
+
+  // Robust touch detection: media query OR touch event support OR touch points OR a touch
+  // already seen. Covers phones, tablets/iPad, and hybrid laptops where one signal lies.
+  _isTouchCapable() {
+    try {
+      return matchMedia('(hover: none), (pointer: coarse)').matches ||
+        ('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0 || this._touchSeen;
+    } catch { return this._touchSeen; }
+  }
+
+  // Desktop fallback: drag with the MOUSE/pen anywhere on the play area to move (for laptops
+  // without a keyboard). Touch is handled by the on-screen joystick instead, so we ignore
+  // pointerType 'touch' and any press that lands on a UI control.
+  _initMouseDrag() {
+    const onDown = (e) => {
+      if (e.pointerType === 'touch') return;
+      if (e.target && e.target.closest && e.target.closest('.btn,.screen,.card,.joystick,.sprint-btn,.item,.list')) return;
+      this._mouseDrag = { ox: e.clientX, oy: e.clientY };
+    };
+    const onMove = (e) => {
+      if (!this._mouseDrag || e.pointerType === 'touch') return;
+      this._applyStick(e.clientX - this._mouseDrag.ox, e.clientY - this._mouseDrag.oy);
+    };
+    const onUp = () => { if (this._mouseDrag) { this._mouseDrag = null; this._sx = 0; this._sy = 0; if (this.nub) this.nub.style.transform = 'translate(0,0)'; } };
+    window.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   }
 
   // Convert a raw pixel offset from the stick centre into deadzone-corrected
@@ -104,8 +138,8 @@ export class Input {
   }
 
   setTouchVisible(v) {
-    const isTouch = matchMedia('(hover: none), (pointer: coarse)').matches;
-    const show = v && isTouch;
+    this._touchWanted = v;
+    const show = v && this._isTouchCapable();
     this.joy.classList.toggle('hidden', !show);
     this.sprintBtn.classList.toggle('hidden', !show);
   }
