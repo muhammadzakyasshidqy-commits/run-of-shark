@@ -90,14 +90,25 @@ export function makeTower(highestUnlocked = 1) {
   const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8), mat(0xffe066, false, { emissive: 0xffaa00, emissiveIntensity: 1 })); beacon.position.y = 23.2; g.add(beacon);
   const flagPole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2, 5), mat(0x333333)); flagPole.position.set(0, 24.5, 0); g.add(flagPole);
   const flag = new THREE.Mesh(new THREE.PlaneGeometry(2, 1.2), mat(0xffd166, false)); flag.position.set(1.1, 24.8, 0); g.add(flag);
-  // level markers spiralling up
+  // Level markers spiralling up: numbered slots 1..6, padlock on locked ones.
   for (let i = 0; i < LEVELS.length; i++) {
-    const unlocked = highestUnlocked >= LEVELS[i].id;
+    const lvl = LEVELS[i];
+    const unlocked = highestUnlocked >= lvl.id;
     const a = (i / LEVELS.length) * Math.PI * 2;
     const y = 4 + i * 1.9;
-    const plate = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.4), mat(unlocked ? 0x2ecc71 : 0x555a5e));
-    plate.position.set(Math.cos(a) * 3, y, Math.sin(a) * 3); plate.lookAt(plate.position.x * 2, y, plate.position.z * 2); g.add(plate);
-    if (!unlocked) { const lock = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.2), mat(0xffd166)); lock.position.copy(plate.position); lock.position.y += 0.1; g.add(lock); }
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 0.35), mat(unlocked ? 0x2ecc71 : 0x46505a));
+    plate.position.set(Math.cos(a) * 3, y, Math.sin(a) * 3);
+    plate.lookAt(plate.position.x * 2, y, plate.position.z * 2); // face outward
+    g.add(plate);
+    // number label on the plate face
+    const num = makeSign(String(lvl.id), 1.2, unlocked ? '#0a3d2a' : '#20262c', unlocked ? '#9be86b' : '#9aa3ab');
+    num.position.set(0, 0, 0.2); plate.add(num);
+    if (!unlocked) { // gold padlock = clearly "level digembok"
+      const lock = new THREE.Group();
+      const bodyL = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.36, 0.16), mat(0xffd166, false, { metalness: 0.5, emissive: 0x4a3500 })); lock.add(bodyL);
+      const shackle = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.05, 6, 12, Math.PI), mat(0xdddddd, false, { metalness: 0.7 })); shackle.position.y = 0.18; lock.add(shackle);
+      lock.position.set(0, 0.35, 0.26); plate.add(lock);
+    }
   }
   const sign = makeSign('LEVELS', 5, '#10243a', '#2ec4ff'); sign.position.set(0, 3, 4.2); g.add(sign);
   g.traverse((o) => { if (o.isMesh && !o.userData.isSign) o.castShadow = true; });
