@@ -51,11 +51,13 @@ export class Hub {
     this._zone('bank', 'bank', -30, -10, 5.5, 0xffd166); this._solid(-36, -16, 6);
     this._npc(-30, -6, 0x2c3e50, 0x111111);  // bank teller
 
-    // Real LUCKY WHEEL (left plaza)
-    this.wheelObj = makeLuckyWheel(6); this.add(this.wheelObj, -34, 0, 4);
-    this.add(makeZoneMarker(4.2, 0xff6b6b), -34, 0, 8);
-    this._zone('wheel', 'wheel', -34, 8, 4.2, 0xff6b6b);
-    this._npc(-30, 8, 0xff6b6b, 0xffd166);   // carnival barker
+    // LUCKY WHEEL (left plaza, next to the Bank). Wheel + its single trigger ring are
+    // aligned: the player stands on the ring directly in FRONT of the wheel to spin it.
+    this.wheelObj = makeLuckyWheel(6); this.add(this.wheelObj, -34, 0, 2);
+    this.wheelObj.rotation.y = 0;            // face +Z (toward the player approaching)
+    this.add(makeSign('LUCKY WHEEL', 5, '#3a0d1a', '#ff6b6b'), -34, 7.4, 2);
+    this._zone('wheel', 'wheel', -34, 7, 4.2, 0xff6b6b);   // single ring (no duplicate)
+    this._npc(-39, 7, 0xff6b6b, 0xffd166);   // carnival barker beside the wheel
 
     // SHOP DISTRICT (right) — three SEPARATE physical kiosks, each its own trigger + NPC.
     // Vehicles are intentionally NOT sold here anymore (garage-only).

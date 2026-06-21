@@ -29,14 +29,26 @@ export function makeBank() {
     const col = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 5, 8), mat(0xffffff));
     col.position.set(x, 2.5, 3.6); g.add(col);
   }
+  // pediment (triangular gable) on top of the columns
   const ped = new THREE.Mesh(new THREE.ConeGeometry(6.2, 2, 4), mat(0xc0392b));
   ped.rotation.y = Math.PI / 4; ped.position.set(0, 6, 1); ped.scale.set(1, 1, 0.55); g.add(ped);
-  const sign = makeSign('BANK', 5, '#0a3d62', '#ffd166'); sign.position.set(0, 5.4, 3.7); g.add(sign);
-  // ATM out front
+  // big gold COIN ($) emblem on the gable — instantly "bank"
+  const coin = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.3, 20), mat(0xffd166, false, { metalness: 0.6, emissive: 0x4a3500 }));
+  coin.rotation.x = Math.PI / 2; coin.position.set(0, 6.2, 3.5); g.add(coin);
+  const dollar = makeSign('$', 1.6, '#ffd166', '#7a5a00'); dollar.position.set(0, 6.2, 3.68); g.add(dollar);
+  // round VAULT door set into the facade
+  const vault = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.4, 20), mat(0x9aa3ab, false, { metalness: 0.7 }));
+  vault.rotation.x = Math.PI / 2; vault.position.set(0, 2.2, 3.55); g.add(vault);
+  const vaultHub = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.5, 8), mat(0xd0d6db, false, { metalness: 0.8 }));
+  vaultHub.rotation.x = Math.PI / 2; vaultHub.position.set(0, 2.2, 3.7); g.add(vaultHub);
+  for (let i = 0; i < 6; i++) { const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.2, 0.16), mat(0xd0d6db, false, { metalness: 0.8 })); spoke.position.set(0, 2.2, 3.66); spoke.rotation.z = (i / 6) * Math.PI; g.add(spoke); }
+  const sign = makeSign('BANK', 5, '#0a3d62', '#ffd166'); sign.position.set(0, 4.4, 3.66); g.add(sign);
+  // ATM out front (clearly separate from the bank building)
   const atm = new THREE.Group();
   const box = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 1), mat(0x2c3e50)); box.position.y = 1; atm.add(box);
   const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.7), mat(0x2ec4ff, false, { emissive: 0x113344 })); scr.position.set(0, 1.4, 0.51); atm.add(scr);
-  atm.position.set(0, 0, 6); g.add(atm);
+  atm.add(makeSign('ATM', 1.0, '#102', '#2ec4ff')); atm.children[atm.children.length - 1].position.set(0, 1.95, 0.52);
+  atm.position.set(4.5, 0, 6); g.add(atm);
   g.traverse((o) => { if (o.isMesh && !o.userData.isSign) o.castShadow = true; });
   return g;
 }
