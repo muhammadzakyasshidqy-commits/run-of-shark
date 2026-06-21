@@ -2,6 +2,7 @@
 // achievements, daily reward, lucky wheel, HUD, win/lose, and the ending cinematic.
 import { LEVELS, UPGRADES, SKINS, ACCESSORIES, VEHICLES, ACHIEVEMENTS, WHEEL_PRIZES } from '../config.js';
 import { dailyStatus, claimDaily } from '../economy/daily.js';
+import { saveSupabaseConfig, resolveSupabaseConfig } from '../save/supabaseConfig.js';
 
 const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 
@@ -546,6 +547,19 @@ export class UI {
     }
   }
 
+  // Paste Supabase creds (stored in localStorage via saveSupabaseConfig) then reload so the
+  // SupabaseProvider re-resolves with them. Blank both = clear (back to guest/local mode).
+  _cloudSetupPrompt() {
+    const cur = resolveSupabaseConfig();
+    const url = prompt('Supabase Project URL (blank to clear cloud):', cur.url || '');
+    if (url === null) return;
+    const key = prompt('Supabase anon public key:', cur.anonKey || '');
+    if (key === null) return;
+    saveSupabaseConfig({ url: url.trim(), anonKey: key.trim() });
+    this.toast((url && key) ? 'Cloud configured — reloading…' : 'Cloud cleared — reloading…');
+    setTimeout(() => location.reload(), 800);
+  }
+
   // ---------- SETTINGS ----------
   showSettings() {
     this.open(() => {
@@ -587,10 +601,16 @@ export class UI {
       const configured = this.cloud && this.cloud.isConfigured();
       acct.appendChild(h('div', null, `<div class="name">☁️ Account</div><div class="lvl">${this.save.data.player.guest ? 'Guest (local save)' : this.save.data.player.name}</div>`));
       acct.appendChild(this.btn(configured ? 'Login' : 'Cloud off', `small ${configured ? '' : 'ghost'}`, () => {
-        if (!configured) return this.toast('Cloud save not configured (see README)');
+        if (!configured) return this.toast('Setup cloud first (button below)');
         this._loginPrompt();
       }));
       card.appendChild(acct);
+
+      // Cloud setup: paste Supabase URL + anon key (stored in localStorage). Reloads to apply.
+      const setup = h('div', 'item');
+      setup.appendChild(h('div', null, `<div class="name">🔧 Cloud Save Setup</div><div class="lvl">${configured ? 'Configured ✓' : 'Not set (guest)'}</div>`));
+      setup.appendChild(this.btn(configured ? 'Edit' : 'Set up', 'small', () => this._cloudSetupPrompt()));
+      card.appendChild(setup);
 
       card.appendChild(h('div', 'muted', `Player: ${this.save.data.player.name} (${this.save.data.player.guest ? 'Guest' : 'Cloud'})`));
       card.appendChild(h('div', 'row', ''));
