@@ -2,7 +2,7 @@
 // Walking into an area's trigger zone opens the SAME validated DOM panel
 // (showBank/showShop/showGarage/showLevels/showWheel) — only the way IN changed.
 import * as THREE from 'three';
-import { makeBank, makeGarage, makeTower, makeZoneMarker, makeNPC, makeArrow, makeLuckyWheel, makeKiosk } from './buildings.js';
+import { makeBank, makeGarage, makeTower, makeZoneMarker, makeNPC, makeSign, makeLuckyWheel, makeKiosk } from './buildings.js';
 import { makeDock, makeBoat } from '../entities/Models.js';
 
 const CENTER = { x: 0, z: -12 };
@@ -25,7 +25,7 @@ export class Hub {
   add(obj, x, y, z) { obj.position.set(x, y, z); this.scene.add(obj); this.objects.push(obj); return obj; }
 
   _build() {
-    this.npcs = []; this.arrows = [];
+    this.npcs = [];
     // Island platform (grass) + sandy rim
     const grass = new THREE.Mesh(new THREE.CylinderGeometry(ISLAND_R, ISLAND_R + 2, 2, 40),
       new THREE.MeshStandardMaterial({ color: 0x6ab04c, flatShading: true, roughness: 1 }));
@@ -72,9 +72,10 @@ export class Hub {
     this._zone('garage', 'garage', 0, -40, 6, 0xe74c3c); this._solid(0, -50, 7);
     this._npc(-5, -42, 0x34495e, 0xe74c3c);  // mechanic (overalls + red rag)
 
-    // Dock + green boat at the front — the "start a mission" point
+    // Dock + wooden boat at the front — the clearly-labelled "start dive" point
     const dock = makeDock(16); this.add(dock, 0, 0, 30);
-    const boat = makeBoat(0x06d6a0); this.add(boat, 4, 0.5, 34);
+    const boat = makeBoat(); this.add(boat, 4, 0.5, 34);
+    this.add(makeSign('DOCK — START DIVE', 7, '#10243a', '#06d6a0'), 0, 2.4, 22);
     this._zone('dock', 'levels', 0, 26, 5, 0x06d6a0);
 
     // simple fence ring so the island edge reads as a boundary
@@ -95,23 +96,8 @@ export class Hub {
       this.add(t, x, 0, z);
     }
 
-    // Direction arrows on the ground (plaza -> each area) so newcomers don't get lost.
-    const arrowSpecs = [
-      { to: [0, -22], color: 0x2ec4ff },   // tower / levels
-      { to: [-30, -10], color: 0xffd166 }, // bank
-      { to: [-34, 8], color: 0xff6b6b },   // wheel
-      { to: [31, -4], color: 0xf1c40f },   // shop district
-      { to: [0, -40], color: 0xe74c3c },   // garage
-      { to: [0, 26], color: 0x06d6a0 },    // dock
-    ];
-    for (const sp of arrowSpecs) {
-      const ar = makeArrow(sp.color);
-      const ang = Math.atan2(sp.to[0] - 0, sp.to[1] - 14);
-      ar.rotation.y = ang;
-      const px = 0 + Math.sin(ang) * 9, pz = 14 + Math.cos(ang) * 9;
-      this.add(ar, px, 0.6, pz);
-      this.arrows.push(ar);
-    }
+    // (Floating chevron arrows removed — they were confusing. Each area is labelled by its
+    // own sign + coloured trigger ring instead.)
 
     // a couple of ambient wanderers in the plaza (shopkeepers were added per-zone via _npc)
     this._npc(-8, 18, 0x4a90d9, 0xffffff);
@@ -174,7 +160,6 @@ export class Hub {
     }
     // animate markers + arrows + NPC idle bob (cheap, keeps the island feeling alive)
     this.zones.forEach((z) => { if (z.marker.userData.ring) z.marker.userData.ring.rotation.z += dt * 1.5; });
-    if (this.arrows) this.arrows.forEach((a, i) => { a.position.y = 0.6 + Math.sin(this._t * 3 + i) * 0.15; });
     if (this.npcs) this.npcs.forEach((n, i) => { n.position.y = Math.abs(Math.sin(this._t * 2 + i)) * 0.08; });
     // Lucky wheel: slow idle spin, but ONLY when not mid-spin (spin is driven by its own
     // rAF in spinWheel() so it works even while the game loop is paused for the panel).

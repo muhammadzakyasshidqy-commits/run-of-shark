@@ -43,9 +43,9 @@ export class Level {
     this.dock.position.set(0, 0, WORLD.beachZ + 6);
     this.scene.add(this.dock);
 
-    // Green boat moored at the shoreline (just ahead of the sand spawn), beside the dock
-    this.boat = makeBoat(0x06d6a0);
-    this.boat.position.set(6, 0.5, WORLD.beachZ + 11);
+    // Wooden boat moored at the shoreline (the dive ride; player boards it in the intro)
+    this.boat = makeBoat();
+    this.boat.position.set(0, 0.5, WORLD.beachZ + 11);
     this.scene.add(this.boat);
 
     // Submarine — the goal (placed deep). Split-route levels center it so both lanes converge.

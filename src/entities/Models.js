@@ -279,16 +279,21 @@ export function makeCoral(seed = 0) {
 // ---------------------------------------------------------------------------
 // WORLD STRUCTURES
 // ---------------------------------------------------------------------------
-export function makeBoat(color = 0x06d6a0) {
+// WOODEN dinghy — brown planks (matches the dock), not teal. `wood` overridable.
+export function makeBoat(wood = 0xb07d4f) {
   const g = new THREE.Group();
-  const hull = new THREE.Mesh(new THREE.CapsuleGeometry(0.7, 2.4, 4, 8), mat(color));
+  const dark = 0x8a5d36;
+  const hull = new THREE.Mesh(new THREE.CapsuleGeometry(0.7, 2.4, 4, 8), mat(wood));
   hull.rotation.z = Math.PI / 2; hull.scale.set(1, 1, 0.7); hull.position.y = 0.5; g.add(hull);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.12, 6, 16), mat(0xffffff));
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.12, 6, 16), mat(dark)); // wooden gunwale
   rim.rotation.x = Math.PI / 2; rim.scale.set(1, 0.55, 1); rim.position.y = 0.8; g.add(rim);
   const deck = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.15, 1.0), mat(0xcaa15a));
   deck.position.y = 0.82; g.add(deck);
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.6, 0.9), mat(0xffffff));
-  cabin.position.set(-0.5, 1.15, 0); g.add(cabin);
+  for (let i = 0; i < 4; i++) { // plank lines on the deck
+    const plank = new THREE.Mesh(new THREE.BoxGeometry(2.62, 0.16, 0.06), mat(dark));
+    plank.position.set(0, 0.83, -0.35 + i * 0.23); g.add(plank);
+  }
+  const bench = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.18, 0.9), mat(dark)); bench.position.set(-0.3, 0.95, 0); g.add(bench);
   const motor = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.3), mat(0x333333));
   motor.position.set(-1.5, 0.6, 0); g.add(motor);
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
