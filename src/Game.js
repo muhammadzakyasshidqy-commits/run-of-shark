@@ -323,6 +323,48 @@ export class Game {
     };
   }
 
+  // --- Level 6 finale: player reaches the LUXURY CAR -> 3D escape from the tsunami.
+  // Car (with player aboard) floors it toward the beach (-Z); the tsunami wall surges
+  // after it; chase camera follows. On escape -> onWin() -> UI ending text + credits.
+  _escapeCutscene() {
+    this.controlLocked = true;
+    const car = this.level.car;
+    const tsunami = this.effects.tsunami;
+    // "get in the car": hide the diver, sit the car where the player reached it
+    this.player.mesh.visible = false;
+    car.position.x = this.player.pos.x; car.position.z = this.player.pos.z; car.position.y = 0.2;
+    car.rotation.y = Math.PI; // face -Z (the escape direction)
+    if (tsunami) { tsunami.position.z = car.position.z + 26; } // wave looming just behind
+    this.audio.tsunami();
+    this.onCine({ title: '🌊 DRIVE!', sub: 'Outrun the tsunami!' });
+    const dur = 4.2; let t = 0; let shook = 0;
+    this.cinematic = (dt) => {
+      t += dt;
+      const carSpeed = 24 + t * 6;              // accelerate away
+      car.position.z -= carSpeed * dt;          // flee toward the beach (-Z)
+      car.position.x += Math.sin(t * 4) * dt * 1.5; // slight swerve for drama
+      if (tsunami) {                            // wave chases, a touch slower so the car wins
+        tsunami.position.z -= (carSpeed - 3) * dt;
+        tsunami.material.color.offsetHSL(0, 0, Math.sin(t * 12) * 0.01);
+      }
+      this.effects.update(dt * 0.0, this.clock.elapsedTime);
+      if (t > shook * 0.25) { shook++; this.shake = Math.max(this.shake, 0.35); } // rumble
+      // chase camera behind + above the car, looking ahead and back at the wave
+      const behind = new THREE.Vector3(car.position.x - 2, 7, car.position.z + 15);
+      this.camera.position.lerp(behind, Math.min(1, dt * 3));
+      if (this.shake > 0) { this.camera.position.x += (Math.random() - 0.5) * this.shake; this.camera.position.y += (Math.random() - 0.5) * this.shake; this.shake = Math.max(0, this.shake - dt * 1.5); }
+      this.camera.lookAt(car.position.x, 1.2, car.position.z - 6);
+      if (t >= dur) {
+        this.onCine(null);
+        this.cinematic = null;
+        this.running = false;
+        this.onWin(this.levelIndex); // -> UI._win -> _ending() text + credits
+        return true;
+      }
+      return false;
+    };
+  }
+
   _skinColor() {
     const id = this.save.data.equippedSkin;
     const skin = (this.save.data.ownedSkins || []).includes(id) ? id : 'blue';
@@ -420,7 +462,11 @@ export class Game {
           danger: this._nearestSharkDist() < 8,
           boss: this.level.boss && this.level.boss.active ? this.level.boss.hp / this.level.boss.maxHp : null,
         });
-        if (result === 'win') { this.running = false; this.onWin(this.levelIndex); }
+        if (result === 'win') {
+          // Final tsunami level: play the 3D escape cutscene BEFORE the win/credits screen.
+          if (this.level.def.tsunami && this.level.car) this._escapeCutscene();
+          else { this.running = false; this.onWin(this.levelIndex); }
+        }
         else if (result === 'lose') { this.running = false; this.shake = 1.2; this.onLose(this.levelIndex); }
       }
     } else {
