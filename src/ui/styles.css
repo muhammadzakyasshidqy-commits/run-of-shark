@@ -88,3 +88,14 @@ h2.head { color: #fff; font-size: 26px; margin-bottom: 14px; }
 .credits-block { margin: 14px 0; }
 .credits-role { color: #9cc6e0; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; margin-top: 8px; }
 .credits-name { color: #ffd166; font-size: 30px; font-weight: 900; letter-spacing: 3px; text-shadow: 0 0 14px rgba(255,209,102,.5); }
+
+/* --- Main menu (Phase H): tidy, themed, no text overlap at any width --- */
+.card { max-height: 92vh; overflow-y: auto; }
+.menu-card { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.menu-emoji { font-size: clamp(40px, 12vw, 64px); line-height: 1; filter: drop-shadow(0 4px 10px rgba(0,0,0,.5)); }
+.menu-card .subtitle { margin: 4px 0 10px; }
+.btn.wide { width: 100%; }
+.menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin: 10px 0; }
+.menu-grid .btn { width: 100%; }
+.menu-credit { margin-top: 12px; color: #9cc6e0; font-size: 13px; letter-spacing: 1px; }
+.menu-credit b { color: #ffd166; letter-spacing: 1px; }

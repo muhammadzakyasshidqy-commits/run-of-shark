@@ -159,30 +159,27 @@ export class UI {
     this._checkDaily();
     this.open(() => {
       const s = h('div', 'screen');
-      const card = h('div', 'card');
+      const card = h('div', 'card menu-card');
+      card.appendChild(h('div', 'menu-emoji', '🦈'));
       card.appendChild(h('div', 'title', 'RUN OF <span class="accent">SHARK</span>'));
-      card.appendChild(h('div', 'subtitle', 'Walk the island • Dive • Escape the shark'));
+      card.appendChild(h('div', 'subtitle', 'Dive the reef · outswim the shark · reach the sub'));
       const wallet = h('div', 'row');
       wallet.appendChild(h('div', 'chip coin-chip', `🪙 ${this.economy.s.coins}`));
       wallet.appendChild(h('div', 'chip', `💵 ${this.economy.s.cash}`));
       wallet.appendChild(h('div', 'chip', `💎 ${this.economy.s.gems}`));
       card.appendChild(wallet);
-      // Primary entry is now the physical island; Bank/Shop/Garage/Levels/Wheel are
-      // reached by WALKING into their buildings there (no menu shortcuts).
-      const row1 = h('div', 'row');
-      row1.appendChild(this.btn('🏝️ ENTER ISLAND', 'green', () => this.enterIsland()));
-      card.appendChild(row1);
-      const grid = h('div', 'row');
-      [['🎽 Skins', () => this.showInventory()], ['🏆 Awards', () => this.showAchievements()],
-       ['🎁 Daily', () => this.showDaily()], ['⚙️ Settings', () => this.showSettings()]].forEach(([l, f]) =>
-        grid.appendChild(this.btn(l, 'small', f)));
+      // Primary entry is the physical island; Bank/Shop/Garage/Levels/Wheel are reached by
+      // WALKING into their buildings there (no menu shortcuts).
+      card.appendChild(this.btn('🏝️ ENTER ISLAND', 'green wide', () => this.enterIsland()));
+      const grid = h('div', 'menu-grid');
+      [['🎽', 'Skins', () => this.showInventory()], ['🏆', 'Awards', () => this.showAchievements()],
+       ['🎁', 'Daily', () => this.showDaily()], ['⚙️', 'Settings', () => this.showSettings()]].forEach(([ic, l, f]) =>
+        grid.appendChild(this.btn(`${ic} ${l}`, 'small', f)));
       card.appendChild(grid);
-      // Watch-ad free coins (uses the existing AdManager abstraction; no real ad network).
-      card.appendChild(this.btn('📺 Free Coins (Watch Ad)', 'gold small', async () => {
+      card.appendChild(this.btn('📺 Free Coins (Watch Ad)', 'gold small wide', async () => {
         if (await this.ads.rewarded()) { this.economy.addCoins(200); this.toast('+200 coins!'); this.showMenu(); }
       }));
-      card.appendChild(h('div', 'muted', 'On the island: Tower=Levels · Bank · Shop · Garage · Wheel · Dock'));
-      card.appendChild(h('div', 'muted', '<span style="opacity:.8">A game by <b style="color:#ffd166">Harun</b> · Dev: <b style="color:#ffd166">Zaky</b></span>'));
+      card.appendChild(h('div', 'menu-credit', 'A game by <b>HARUN</b> · Dev <b>ZAKY</b>'));
       s.appendChild(card);
       return s;
     });
