@@ -110,17 +110,22 @@ export class Player {
       const targetLean = moving ? -1.0 : -0.7;
       lean.rotation.x += (targetLean - lean.rotation.x) * Math.min(1, dt * 5);
       this._phase += dt * (moving ? 11 : 4);
-      // front-crawl: shoulders windmill in opposition, big sweep when moving
-      const amp = moving ? 1.6 : 0.35, bias = -0.4;
+      // front-crawl: shoulders windmill in opposition (full overhead reach), big when moving
+      const amp = moving ? 1.9 : 0.4, bias = -0.3;
       parts.shL.rotation.x = bias + Math.sin(this._phase) * amp;
       parts.shR.rotation.x = bias + Math.sin(this._phase + Math.PI) * amp;
-      // flutter kick: small, fast, opposed
-      const kick = Math.sin(this._phase * 1.8) * (moving ? 0.5 : 0.14);
+      parts.shL.rotation.z = -0.25; parts.shR.rotation.z = 0.25; // arms held out, not glued to body
+      // body ROLL toward the pulling arm — reads clearly as swimming, not sliding
+      lean.rotation.z = Math.sin(this._phase) * (moving ? 0.28 : 0.08);
+      // flutter kick: fast, opposed
+      const kick = Math.sin(this._phase * 1.9) * (moving ? 0.55 : 0.16);
       parts.hipL.rotation.x = kick; parts.hipR.rotation.x = -kick;
       if (parts.torso) parts.torso.scale.y = 1 + Math.sin(this._phase * 0.5) * 0.02;
     } else {
-      // upright walk cycle
+      // upright walk cycle (no lean, no roll, no arm-spread)
       lean.rotation.x += (0 - lean.rotation.x) * Math.min(1, dt * 5);
+      lean.rotation.z += (0 - lean.rotation.z) * Math.min(1, dt * 8);
+      parts.shL.rotation.z = 0; parts.shR.rotation.z = 0;
       this._phase += dt * (moving ? 12 : 3);
       const swing = Math.sin(this._phase) * (moving ? 0.7 : 0.12);
       parts.shL.rotation.x = swing; parts.shR.rotation.x = -swing;
