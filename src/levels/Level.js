@@ -24,7 +24,9 @@ export class Level {
     this.playerRadius = 0.5;
     this.collected = 0;
     this.elapsed = 0;
-    this.state = 'collect'; // collect -> escape -> boss -> done/win/lose
+    // Dive levels are a CHASE from the start: you swim straight for the submarine while the
+    // shark hunts you. Coins are just currency picked up along the way (not a win gate).
+    this.state = def.boss && !def.tsunami ? 'boss' : 'escape';
     this.boss = null;
     this.bossCtrl = null;
     this.onBossDefeated = () => {}; // wired by Game (runs defeat cutscene then win)
@@ -152,9 +154,13 @@ export class Level {
     const s = new Shark(this.scene, typeKey, this.speedMult);
     s.onRoar = () => this.audio.sharkRoar();
     s.onCharge = () => this.audio.charge();
-    // Split-route bias: the first shark patrols the LEFT lane, making it the risky/fast path.
     if (this.def.splitRoute && this.sharks.filter((x) => !x.isBoss).length === 0) {
+      // Split-route bias: the first shark patrols the LEFT lane (risky/fast path).
       s.pos.set(-WORLD.size * 0.35, -0.4, WORLD.size - 20);
+    } else if (!s.isBoss) {
+      // Dive levels: spawn BEHIND the diver (near the drop point) so it chases from behind
+      // toward the submarine, instead of lurking at the goal.
+      s.pos.set((Math.random() - 0.5) * 24, -0.5, WORLD.beachZ + 22);
     }
     this.sharks.push(s);
     if (this.boss === null && (typeKey === 'boss' || typeKey === 'kraken')) this.boss = s;
@@ -207,7 +213,7 @@ export class Level {
     this.submarine.userData.ring.rotation.z += dt;
     this.coins.forEach((c) => { if (c.userData.spin) c.rotation.z += dt * 3; c.position.y += Math.sin(this.elapsed * 3 + c.id) * 0.002; });
 
-    // queued shark spawns (after the player has been collecting a while)
+    // queued shark spawns — short delays so the chase starts right after the dive
     for (const q of this._sharkQueue) {
       if (!q.spawned && this.elapsed >= q.delay) { q.spawned = true; this._spawnShark(q.type); this.audio.sharkRoar(); }
     }
@@ -228,15 +234,6 @@ export class Level {
         this.effects.burst(c.position, 0xffd166, c.userData.chest ? 18 : 10);
         this.scene.remove(c);
         this.coins.splice(i, 1);
-      }
-    }
-
-    // transition collect -> escape once enough collected
-    if (this.state === 'collect' && this.def.coinsToWin && this.collected >= this.def.coinsToWin) {
-      this.state = 'escape';
-      // ensure at least one shark exists to chase
-      if (this.sharks.length === 0 && this._sharkQueue[0]) {
-        this._sharkQueue[0].spawned = true; this._spawnShark(this._sharkQueue[0].type); this.audio.sharkRoar();
       }
     }
 
@@ -275,8 +272,8 @@ export class Level {
       return null;
     }
 
-    // standard level: reached submarine after collecting
-    if ((this.state === 'escape') && goalDist < 4) { this.audio.win(); return 'win'; }
+    // Dive level: win by REACHING the submarine (it then ferries you to the ship). No coin gate.
+    if (goalDist < 4) { this.audio.win(); return 'win'; }
     return null;
   }
 
@@ -286,8 +283,7 @@ export class Level {
       return 'Bait the boss into the SHARP ROCKS!';
     }
     if (this.def.tsunami) return 'Reach the LUXURY CAR — RUN!';
-    if (this.state === 'collect') return `Collect ${this.def.coinsToWin - this.collected} more treasure`;
-    return 'Reach the YELLOW SUBMARINE!';
+    return '🦈 SWIM! Reach the submarine — the shark is chasing!';
   }
 
   dispose() {

@@ -19,10 +19,12 @@ export const SHARK_TYPES = {
 
 // Six levels matching the design brief.
 export const LEVELS = [
-  { id: 1, name: 'First Dive',     coinsToWin: 8,  sharks: [{ type: 'normal', delay: 4 }], corals: 6,  objective: 'Collect 8 treasures, then reach the YELLOW SUBMARINE' },
-  { id: 2, name: 'Faster Waters',  coinsToWin: 12, sharks: [{ type: 'fast', delay: 3 }], corals: 10, objective: 'Coins are everywhere — grab 12 and escape the fast shark' },
-  { id: 3, name: 'Coral Maze',     coinsToWin: 14, sharks: [{ type: 'normal', delay: 3 }, { type: 'fast', delay: 7 }], corals: 22, objective: 'Two sharks hunt you. Collect 14 and reach the sub' },
-  { id: 4, name: 'Mutant Depths',  coinsToWin: 16, sharks: [{ type: 'mutant', delay: 2 }, { type: 'hammerhead', delay: 6 }], corals: 14, splitRoute: true,
+  // coinsToWin is just a coin-count hint now (currency), NOT a win gate. Shark delays are
+  // short so the chase starts right after the dive. Win = reach the submarine.
+  { id: 1, name: 'First Dive',     coinsToWin: 8,  sharks: [{ type: 'normal', delay: 1.5 }], corals: 6,  objective: 'Dive and swim to the submarine — the shark is chasing!' },
+  { id: 2, name: 'Faster Waters',  coinsToWin: 12, sharks: [{ type: 'fast', delay: 1 }], corals: 10, objective: 'A fast shark is on you from the start — reach the sub!' },
+  { id: 3, name: 'Coral Maze',     coinsToWin: 14, sharks: [{ type: 'normal', delay: 1 }, { type: 'fast', delay: 4 }], corals: 22, objective: 'Weave the coral maze — two sharks hunt you!' },
+  { id: 4, name: 'Mutant Depths',  coinsToWin: 16, sharks: [{ type: 'mutant', delay: 1 }, { type: 'hammerhead', delay: 4 }], corals: 14, splitRoute: true,
     // Central divider wall splits the field into LEFT (risky/fast) and RIGHT (safe/slow) lanes.
     barriers: [{ x: 0, z: 35, hx: 2.5, hz: 50 }],
     objective: 'Pick a lane: LEFT (shark close) or RIGHT (longer, more coral)' },

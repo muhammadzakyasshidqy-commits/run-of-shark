@@ -266,7 +266,70 @@ export class Game {
       this.level.onBossDefeated = () => this._bossDefeat();
       this.level.bossCtrl.onShake = (a) => { this.shake = Math.max(this.shake, a); };
       this._bossIntro(this.level.boss);
+    } else if (!this.level.def.tsunami) {
+      // Dive levels (1-4): ride the wooden boat out, then dive in and start swimming.
+      this._diveIntro();
     }
+  }
+
+  // --- Win feedback: player reaches the submarine -> it surfaces and ferries them to the
+  // metal ship (the level goal), then onWin(). Makes the submarine->ship link explicit.
+  _subToShip() {
+    this.controlLocked = true;
+    const sub = this.level.submarine, ship = this.level.ship;
+    this.player.mesh.visible = false;            // "boards" the submarine
+    this.effects.burst(sub.position, 0x9fd8ff, 18);
+    this.audio.win();
+    this.onCine({ title: 'ESCAPED!', sub: 'The submarine carries you to the ship…' });
+    const start = sub.position.clone();
+    const dest = new THREE.Vector3(ship.position.x, 1.2, ship.position.z - 4);
+    const dur = 2.8; let t = 0;
+    this.cinematic = (dt) => {
+      t += dt; const k = Math.min(1, t / dur);
+      sub.position.lerpVectors(start, dest, k);  // sub travels to the ship
+      sub.position.y = 0.2 + Math.sin(k * Math.PI) * 1.2; // surface arc
+      const cam = new THREE.Vector3(sub.position.x - 10, 7, sub.position.z - 12);
+      this.camera.position.lerp(cam, Math.min(1, dt * 3));
+      this.camera.lookAt(ship.position.x, 3, ship.position.z);
+      if (t >= dur) {
+        this.onCine(null); this.cinematic = null; this.running = false;
+        this.onWin(this.levelIndex);
+        return true;
+      }
+      return false;
+    };
+  }
+
+  // --- Dive intro: player rides the wooden boat from the dock out to the drop point,
+  // then dives in. Short but felt; control + shark chase begin after the splash.
+  _diveIntro() {
+    this.controlLocked = true;
+    const boat = this.level.boat;
+    const startZ = boat.position.z, divePoint = this.shorelineZ + 16;
+    // sit the player on the boat
+    this.player.pos.set(boat.position.x, boat.position.y + 0.6, boat.position.z);
+    this.player.mesh.visible = true;
+    this.onCine({ title: 'DIVE!', sub: 'Reach the submarine — the shark hunts you' });
+    const dur = 2.6; let t = 0; let dived = false;
+    this.cinematic = (dt) => {
+      t += dt; const k = Math.min(1, t / 1.7);
+      // boat motors out to the drop point with the player aboard
+      const z = startZ + (divePoint - startZ) * k;
+      boat.position.z = z; this.player.pos.z = z; this.player.pos.x = boat.position.x;
+      this.player.pos.y = boat.position.y + 0.6;
+      if (k >= 1 && !dived) { dived = true; this.effects.burst(this.player.pos, 0x9fd8ff, 16); this.audio.pickup(); }
+      if (dived) this.player.pos.y = 0.2; // splashed into the water
+      // chase-style camera behind the boat
+      this.camYaw = 0;
+      this.camera.position.lerp(new THREE.Vector3(boat.position.x, this.camHeight, z - this.camRadius), Math.min(1, dt * 3));
+      this.camera.lookAt(boat.position.x, 1, z + this.camAhead);
+      if (t >= dur) {
+        this.onCine(null); this.cinematic = null; this.controlLocked = false;
+        this.player.pos.set(boat.position.x, 0.2, divePoint); // begin swim here (numeric divePoint)
+        return true;
+      }
+      return false;
+    };
   }
 
   // --- Boss intro cutscene: pan + slow zoom onto the boss + name banner ---
@@ -463,9 +526,8 @@ export class Game {
           boss: this.level.boss && this.level.boss.active ? this.level.boss.hp / this.level.boss.maxHp : null,
         });
         if (result === 'win') {
-          // Final tsunami level: play the 3D escape cutscene BEFORE the win/credits screen.
-          if (this.level.def.tsunami && this.level.car) this._escapeCutscene();
-          else { this.running = false; this.onWin(this.levelIndex); }
+          if (this.level.def.tsunami && this.level.car) this._escapeCutscene();   // final escape
+          else this._subToShip();                                                 // dive level: sub -> ship
         }
         else if (result === 'lose') { this.running = false; this.shake = 1.2; this.onLose(this.levelIndex); }
       }
