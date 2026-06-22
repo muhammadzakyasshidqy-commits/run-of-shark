@@ -8,7 +8,10 @@ await p.evaluate(() => { document.getElementById('ui-root').style.display = 'non
 // top-down (true map view); highestLevel=1 so levels 2-6 show locks
 await p.evaluate(async () => {
   const g = window.__ROS.game; g.save.data.highestLevel = 1; g.enterHub(); g.paused = true; g.scene.fog = null;
-  g.camera.position.set(0, 120, -12.001); g.camera.lookAt(0, 0, -12);
+  // Map orientation: up=-Z so the BACK of the island (tower+garage) is at the TOP of the image,
+  // the FRONT (dock) at the bottom, and +X to the right (no mirroring).
+  g.camera.up.set(0, 0, -1);
+  g.camera.position.set(0, 120, -12); g.camera.lookAt(0, 0, -12);
   for (let k = 0; k < 6; k++) { g.renderer.render(g.scene, g.camera); await new Promise(r => requestAnimationFrame(r)); }
 });
 await sleep(150); await p.screenshot({ path: 'hub-topdown.png' });

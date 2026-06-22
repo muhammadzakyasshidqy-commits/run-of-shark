@@ -70,27 +70,33 @@ export class Hub {
     const upgShop = makeKiosk('UPGRADES', 0x06d6a0, 0x2ecc71); this.add(upgShop, 40, 0, 12); this._solid(40, 12, 5.5);
     this._zone('upgradeshop', 'upgrades', 31, 12, 5, 0x06d6a0); this._npc(31, 16, 0x16a085, 0xffd166);
 
-    // GARAGE SHOWROOM (front-left, accessible) — each vehicle is a PHYSICAL car you walk up
-    // to; standing by one opens a buy/own panel for THAT car (zone panel 'veh:<id>').
-    const gx = -34, gz = 30;                                   // showroom origin (front-left)
-    const canopy = makeGarage(this.save.data.ownedVehicles || []); // reuse as the open structure
-    this.add(canopy, gx + 10, 0, gz); canopy.scale.setScalar(1.1);
-    this.add(makeSign('GARAGE', 6, '#2c2c2c', '#ffffff'), gx + 10, 5.2, gz);
-    this._npc(gx + 18, gz + 3, 0x34495e, 0xe74c3c);            // mechanic
+    // GARAGE SHOWROOM (BACK — behind the Tower, filling the previously-empty rear of the island).
+    // Each vehicle is a PHYSICAL car you walk up to; standing by one opens a buy/own panel for
+    // THAT car (zone panel 'veh:<id>'). One tidy row centred on x=0, every car facing the player
+    // (+Z); the canopy is scaled to span the whole row so no car pokes out from under it.
+    const gz = -44;                                            // showroom row depth (clear behind tower@z=-32)
+    const canopy = makeGarage(this.save.data.ownedVehicles || []);
+    this.add(canopy, 0, 0, gz - 4); canopy.scale.setScalar(1.8); // centred behind the row, covers its full width
+    this.add(makeSign('GARAGE', 6, '#2c2c2c', '#ffffff'), 0, 6, gz + 3);
+    this._npc(15, gz, 0x34495e, 0xe74c3c);                     // mechanic to the side
     this.vehicleCars = {};
+    const SPACING = 5.8;                                       // > 2*zoneR(2.6) so adjacent zones keep a clear gap
+    const gx = -((VEHICLES.length - 1) * SPACING) / 2;         // left end so the row is centred on x=0
     VEHICLES.forEach((v, i) => {
       const owned = (this.save.data.ownedVehicles || []).includes(v.id);
       const car = makeCar(v.color);
       if (!owned) car.traverse((o) => { if (o.isMesh && o.material) { o.material.transparent = true; o.material.opacity = 0.5; o.material.color.setHex(0x6b7077); } });
-      const cx = gx + i * 5.2, cz = gz;
-      this.add(car, cx, 0.2, cz); car.rotation.y = Math.PI;
+      const cx = gx + i * SPACING, cz = gz;
+      this.add(car, cx, 0.2, cz); car.rotation.y = -Math.PI / 2; // face +Z (toward the approaching player)
       this.vehicleCars[v.id] = { car, color: v.color };
-      this._zone('veh:' + v.id, 'veh:' + v.id, cx, cz - 3, 2.6, owned ? 0x2ecc71 : 0xffd166);
+      this._zone('veh:' + v.id, 'veh:' + v.id, cx, cz + 3, 2.6, owned ? 0x2ecc71 : 0xffd166); // zone on player side
     });
 
-    // Dock + wooden boat at the front — the clearly-labelled "start dive" point
+    // Dock + wooden boat at the front — the clearly-labelled "start dive" point. The boat sits
+    // centred (x=0) at the SEAWARD tip of the 16-long dock (z=30±8 → tip z≈37) and points out to
+    // sea (+Z), so it reads unmistakably as "board here to dive".
     const dock = makeDock(16); this.add(dock, 0, 0, 30);
-    const boat = makeBoat(); this.add(boat, 4, 0.5, 34);
+    const boat = makeBoat(); this.add(boat, 0, 0.5, 37); boat.rotation.y = -Math.PI / 2;
     this.add(makeSign('DOCK — START DIVE', 7, '#10243a', '#06d6a0'), 0, 2.4, 22);
     this._zone('dock', 'levels', 0, 26, 5, 0x06d6a0);
 
