@@ -18,4 +18,20 @@ Source bundle: https://poly.pizza/bundle/Cars-Bundle-FE5IWe6OMk
 | Sports Car | `car_sports.glb` | Sports Coupe — https://poly.pizza/m/1mkmFkAz5v |
 | Luxury Car (+ L6 ending) | `car_luxury.glb` | Luxury Sedan — https://poly.pizza/m/Cz6yDaUcM9 |
 
-<!-- Sharks (Animated Fish Bundle) and player diver (Quaternius character) credits added in later phases. -->
+## Sea creatures — "Animated Fish Bundle" (Quaternius, CC0)
+Source bundle: https://poly.pizza/bundle/Animated-Fish-Bundle-ZkGbjS8m8g
+Both ship with a built-in skinned **"Swim"** animation clip, played via `AnimationMixer`.
+
+| Used for | File | poly.pizza model |
+|---|---|---|
+| All shark variants (normal/fast/mutant/hammerhead/ghost/boss) | `fish_shark.glb` | Shark (great white) — https://poly.pizza/m/AyHTK3zUSG |
+| Kraken final boss (distinct silhouette) | `fish_manta.glb` | Manta ray — https://poly.pizza/m/yzD8b7ZHZm |
+
+**Variant mapping (one shark mesh, varied by tint + scale):** the bundle has no hammerhead or
+kraken model, so per the brief we differentiate by colour/scale (from `SHARK_TYPES`): normal=grey,
+fast=blue (smaller), mutant=green (bigger), **hammerhead=grey (NO true T-head model available —
+differentiated by tint/scale only)**, ghost=semi-transparent, boss=large dark great-white. The
+**kraken** uses the manta-ray mesh (scaled 3.2, near-black) to give the final boss a unique shape.
+
+<!-- Player diver (Quaternius character) credit added in the next phase. -->
+

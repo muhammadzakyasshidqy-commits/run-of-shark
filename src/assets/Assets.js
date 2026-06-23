@@ -21,6 +21,10 @@ const MANIFEST = {
   car_jeep:   { url: '/models/car_jeep.glb',   fit: 3.6, yaw: 0 },
   car_sports: { url: '/models/car_sports.glb', fit: 3.5, yaw: 0 },
   car_luxury: { url: '/models/car_luxury.glb', fit: 3.8, yaw: 0 },
+  // Animated fish (skinned, built-in swim clip). yaw chosen so the snout points LOCAL +X
+  // (Shark.js faces movement via rotation.y = atan2(-dz, dx), i.e. a +X-facing model).
+  fish_shark: { url: '/models/fish_shark.glb', fit: 4.2, yaw: -Math.PI / 2 }, // snout -Z -> +X
+  fish_manta: { url: '/models/fish_manta.glb', fit: 5.0, yaw: -Math.PI / 2 },
 };
 
 const cache = {};   // name -> { root: THREE.Group, animations: [], skinned: bool }

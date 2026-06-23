@@ -4,7 +4,7 @@
 // primitive when the asset isn't loaded. Gameplay reads only a few userData contracts
 // (submarine.userData.ring, coin.userData.spin) and group transform/scale.
 import * as THREE from 'three';
-import { getModel } from '../assets/Assets.js';
+import { getModel, modelAnimations } from '../assets/Assets.js';
 
 const mat = (color, flat = true, opts = {}) =>
   new THREE.MeshStandardMaterial({ color, flatShading: flat, roughness: 0.82, metalness: 0.04, ...opts });
@@ -143,7 +143,35 @@ export function makeAccessory(id) {
 // userData.segments / tail / jaw are animated by Shark.js. The GROUP keeps the
 // same overall size band as before so the validated collision radius still matches.
 // ---------------------------------------------------------------------------
+// makeShark: returns an animated GLB fish when loaded (kraken=manta-ray silhouette, all
+// others=great-white shark), tinted to the type colour, with its built-in "Swim" clip
+// playing via an AnimationMixer stored on userData.mixer (Shark.js advances it each frame).
+// Falls back to the procedural segmented shark below. The snout points local +X to satisfy
+// Shark._face(); collision radius is unchanged (Shark.radius uses def.scale, not the mesh).
 export function makeShark(color = 0x6c7a89, scale = 1, type = 'normal') {
+  const modelName = type === 'kraken' ? 'fish_manta' : 'fish_shark';
+  const glb = getModel(modelName);
+  if (glb) {
+    glb.scale.setScalar(scale);
+    const ghost = type === 'ghost';
+    glb.traverse((o) => {
+      if (o.isMesh && o.material) {
+        const m = o.material;
+        if (m.color) m.color.setHex(color);          // type colour = the shark's identity
+        if (m.emissive) { m.emissive.setHex(0x000000); m.emissiveIntensity = 0; } // telegraph baseline
+        if (ghost) { m.transparent = true; m.opacity = 0.5; }
+      }
+    });
+    const anims = modelAnimations(modelName);
+    if (anims && anims.length) {
+      const mixer = new THREE.AnimationMixer(glb);
+      const clip = anims.find((a) => /swim/i.test(a.name)) || anims[0];
+      const action = mixer.clipAction(clip); action.play();
+      glb.userData.mixer = mixer;
+    }
+    return glb;
+  }
+
   const g = new THREE.Group();
   const belly = 0xeef2f3;
   const ghost = type === 'ghost';

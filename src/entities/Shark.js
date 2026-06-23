@@ -68,6 +68,9 @@ export class Shark {
   _swimAnim(dt) {
     this.aggression += (this.aggressionTarget - this.aggression) * Math.min(1, dt * 4);
     const ud = this.mesh.userData;
+    // GLB shark: advance its built-in swim clip (faster while attacking). The procedural
+    // segment/tail/jaw block below is skipped when those userData contracts are absent.
+    if (ud.mixer) { ud.mixer.update(dt * (0.8 + this.aggression * 1.4)); return; }
     const freq = 6 + this.aggression * 8;
     const amp = 0.12 + this.aggression * 0.22;
     if (ud.segments) {
