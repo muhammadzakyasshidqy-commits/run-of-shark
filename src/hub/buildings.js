@@ -1,7 +1,7 @@
 // Low-poly cartoon hub structures (procedural, no external assets). Each returns a Group.
 // Signage uses a CanvasTexture so labels are readable without image files.
 import * as THREE from 'three';
-import { VEHICLES, LEVELS } from '../config.js';
+import { LEVELS } from '../config.js';
 
 const mat = (c, flat = true, o = {}) => new THREE.MeshStandardMaterial({ color: c, flatShading: flat, roughness: 0.85, ...o });
 
@@ -77,14 +77,8 @@ export function makeGarage(ownedVehicleIds = []) {
   const slab = new THREE.Mesh(new THREE.BoxGeometry(14, 0.3, 7), mat(0x7f8c8d)); slab.position.y = 0.15; g.add(slab);
   for (const x of [-6.5, 6.5]) { for (const z of [-3, 3]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 4, 6), mat(0xbdc3c7)); post.position.set(x, 2, z); g.add(post); } }
   const roof = new THREE.Mesh(new THREE.BoxGeometry(15, 0.4, 8), mat(0xe74c3c)); roof.position.set(0, 4.1, 0); g.add(roof);
-  // vehicle silhouettes (first 5 slots)
-  VEHICLES.slice(0, 5).forEach((v, i) => {
-    const owned = ownedVehicleIds.includes(v.id);
-    const car = new THREE.Mesh(new THREE.BoxGeometry(2, 0.9, 1.3), mat(owned ? v.color : 0x555a5e, true, owned ? {} : { opacity: 0.6, transparent: true }));
-    car.position.set(-5 + i * 2.5, 0.75, 0); g.add(car);
-    const cab = new THREE.Mesh(new THREE.BoxGeometry(1, 0.6, 1.1), mat(owned ? 0x222831 : 0x44484c)); cab.position.set(-5 + i * 2.5, 1.4, 0); g.add(cab);
-  });
-  const sign = makeSign('GARAGE', 6, '#2c2c2c', '#ffffff'); sign.position.set(0, 4.6, 0); g.add(sign);
+  // (Silhouette cars + internal sign removed — the real GLB showroom cars now sit under this
+  // open canopy, and the Hub adds the GARAGE sign, so an empty roofed structure reads cleaner.)
   g.traverse((o) => { if (o.isMesh && !o.userData.isSign) o.castShadow = true; });
   return g;
 }

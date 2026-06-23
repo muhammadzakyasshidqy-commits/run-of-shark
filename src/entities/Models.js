@@ -1,8 +1,10 @@
 // Models — low-poly cartoon mesh factory (Bridge Race-ish "chunky" style).
-// All geometry is procedural (Three.js primitives) — no external 3D assets.
-// IMPORTANT: gameplay reads only a few userData contracts (submarine.userData.ring,
-// coin.userData.spin) and group transform/scale. Visual internals are free to change.
+// Geometry is procedural (Three.js primitives) EXCEPT where a preloaded GLB asset is
+// available (see Assets.js) — those factories return a cloned GLB and fall back to the
+// primitive when the asset isn't loaded. Gameplay reads only a few userData contracts
+// (submarine.userData.ring, coin.userData.spin) and group transform/scale.
 import * as THREE from 'three';
+import { getModel } from '../assets/Assets.js';
 
 const mat = (color, flat = true, opts = {}) =>
   new THREE.MeshStandardMaterial({ color, flatShading: flat, roughness: 0.82, metalness: 0.04, ...opts });
@@ -395,7 +397,11 @@ export function makeHazard(seed = 0) {
   return g;
 }
 
-export function makeCar(color = 0xffd166) {
+// makeCar(spec): spec may be a GLB model name ('car_atv'…'car_luxury') or a hex colour.
+// Returns the cloned GLB when loaded; otherwise the primitive car below (graceful fallback).
+export function makeCar(spec = 0xffd166) {
+  if (typeof spec === 'string') { const glb = getModel(spec); if (glb) return glb; }
+  const color = typeof spec === 'number' ? spec : 0xcfd3d6;
   const g = new THREE.Group();
   const body = new THREE.Mesh(new THREE.BoxGeometry(3, 0.6, 1.5), mat(color, false, { metalness: 0.3, roughness: 0.4 }));
   body.position.y = 0.65; g.add(body);
@@ -421,10 +427,17 @@ export function makeCar(color = 0xffd166) {
   return g;
 }
 
-// LUXURY CAR — the level-6 ending prize. Bigger, glossier and clearly fancier than the
-// garage cars: chrome trim, rear spoiler, gold rims, a roof beacon + an emissive "light
-// beam" column so the panicking player can spot it while fleeing the tsunami.
+// LUXURY CAR — the level-6 ending prize (also the garage's Luxury slot). Uses the premium
+// GLB sedan when loaded; falls back to the glossy primitive below otherwise. A roof beacon +
+// emissive light-beam column are added on top so the fleeing player can spot it either way.
 export function makeLuxuryCar(color = 0xffd166) {
+  const glb = getModel('car_luxury');
+  if (glb) {
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 14, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.28 }));
+    beam.position.y = 7; glb.add(beam);
+    return glb;
+  }
   const g = new THREE.Group();
   const glossy = (c) => mat(c, false, { metalness: 0.85, roughness: 0.12 });
   const body = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.7, 1.9), glossy(color)); body.position.y = 0.75; g.add(body);

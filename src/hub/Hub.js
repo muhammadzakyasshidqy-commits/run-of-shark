@@ -82,10 +82,11 @@ export class Hub {
     this.vehicleCars = {};
     const SPACING = 5.8;                                       // > 2*zoneR(2.6) so adjacent zones keep a clear gap
     const gx = -((VEHICLES.length - 1) * SPACING) / 2;         // left end so the row is centred on x=0
+    const CAR_MODELS = { atv: 'car_atv', buggy: 'car_buggy', jeep: 'car_jeep', sports: 'car_sports', luxury: 'car_luxury' };
     VEHICLES.forEach((v, i) => {
       const owned = (this.save.data.ownedVehicles || []).includes(v.id);
-      const car = makeCar(v.color);
-      if (!owned) car.traverse((o) => { if (o.isMesh && o.material) { o.material.transparent = true; o.material.opacity = 0.5; o.material.color.setHex(0x6b7077); } });
+      const car = makeCar(CAR_MODELS[v.id] || v.color);        // distinct GLB per tier (falls back to primitive)
+      if (!owned) car.traverse((o) => { if (o.isMesh && o.material) { o.material.transparent = true; o.material.opacity = 0.45; } }); // ghost = not bought
       const cx = gx + i * SPACING, cz = gz;
       this.add(car, cx, 0.2, cz); car.rotation.y = -Math.PI / 2; // face +Z (toward the approaching player)
       this.vehicleCars[v.id] = { car, color: v.color };
@@ -132,14 +133,12 @@ export class Hub {
     this.add(npc, x, 0, z); this.npcs.push(npc);
   }
 
-  // Recolour a showroom car to "owned" (full colour, opaque) after purchase.
+  // Turn a showroom car from "ghost" (faded) to fully solid after purchase. Opacity-only so
+  // it works for both the GLB models (native paint preserved) and the primitive fallback.
   markVehicleOwned(id) {
     const entry = this.vehicleCars && this.vehicleCars[id];
     if (!entry) return;
     entry.car.traverse((o) => { if (o.isMesh && o.material) { o.material.transparent = false; o.material.opacity = 1; } });
-    // restore body colour on the main body meshes (leave tyres/glass as-is)
-    const body = entry.car.children.find((c) => c.isMesh);
-    if (body) body.material.color.setHex(entry.color);
   }
 
   // Spin the physical wheel so the TOP pointer lands on segment `index`, after several

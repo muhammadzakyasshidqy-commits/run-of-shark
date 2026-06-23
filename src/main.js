@@ -6,6 +6,7 @@ import { AdManager } from './ads/AdManager.js';
 import { SupabaseProvider } from './save/CloudProvider.js';
 import { Game } from './Game.js';
 import { UI } from './ui/UI.js';
+import { loadAssets, assetsReady } from './assets/Assets.js';
 
 const canvas = document.getElementById('game-canvas');
 const uiRoot = document.getElementById('ui-root');
@@ -26,9 +27,13 @@ if (cloud.isConfigured()) {
   save.syncFromCloud().then((r) => { if (r.ok) { economy.onChange(); ui.showMenu(); } }).catch(() => {});
 }
 
+// Preload 3D GLB assets in the background while the player is on the menu, so the hub/levels
+// open with the real models. Falls back to primitives if a model is still loading or failed.
+loadAssets();
+
 // Unlock audio on first interaction (browser autoplay policy).
 const unlock = () => { audio.unlock(); window.removeEventListener('pointerdown', unlock); };
 window.addEventListener('pointerdown', unlock);
 
 // Expose for debugging.
-window.__ROS = { game, economy, save, ui, cloud };
+window.__ROS = { game, economy, save, ui, cloud, assetsReady };
