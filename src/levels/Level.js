@@ -125,12 +125,23 @@ export class Level {
       this.coins.push(m);
     }
 
-    // Level 6 final prize: the special LUXURY CAR (with light beam) in place of the sub
+    // Level 6 final prize: the LUXURY CAR on a CENTRED, raised SAFE PLATFORM at the far end,
+    // with a bright beacon so the player clearly sees where to run.
     if (this.def.id === 6) {
-      this.car = makeLuxuryCar(0xffd166);
-      this.car.position.copy(this.submarine.position);
-      this.car.position.y = 0.2;
       this.submarine.visible = false;
+      const goalZ = WORLD.size - 14;
+      // sandy safe pad lifting the car above the water so it's visible from afar
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(7, 8, 1.4, 16),
+        new THREE.MeshStandardMaterial({ color: 0xf2e2b8, flatShading: true, roughness: 1 }));
+      pad.position.set(0, 0.2, goalZ); pad.receiveShadow = true; this.scene.add(pad); this.barriers.push(pad);
+      this.car = makeLuxuryCar(0xffd166);
+      this.car.position.set(0, 1.0, goalZ);
+      this.submarine.position.set(0, 0, goalZ);   // keep goal math centred on the pad
+      // pulsing beacon ring on the pad + a glow column (the GLB car also carries a light beam)
+      const beacon = new THREE.Mesh(new THREE.TorusGeometry(6, 0.3, 8, 24),
+        new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xffaa00, emissiveIntensity: 1, flatShading: true }));
+      beacon.rotation.x = -Math.PI / 2; beacon.position.set(0, 1.0, goalZ); this.scene.add(beacon); this.barriers.push(beacon);
+      this._goalBeacon = beacon;
       this.scene.add(this.car);
     }
 

@@ -1,7 +1,7 @@
 // Player — movement, stamina/sprint, magnet radius. Driven by Input + Economy stats.
 import * as THREE from 'three';
-import { makeDiver, makeAccessory } from './Models.js';
-import { WORLD } from '../config.js';
+import { makeDiver, makeAccessory, makeSeaVehicle } from './Models.js';
+import { WORLD, VEHICLES } from '../config.js';
 
 export class Player {
   constructor(scene, economy, skinColor) {
@@ -60,10 +60,27 @@ export class Player {
     }
   }
 
+  // Attach the equipped sea vehicle under the diver so you visibly "ride" it while diving.
+  _attachVehicle() {
+    const vid = this.economy.s.equippedVehicle;
+    if (!vid) return;
+    const v = VEHICLES.find((x) => x.id === vid);
+    const veh = makeSeaVehicle(vid, v && v.color);
+    veh.scale.setScalar(0.6);
+    veh.rotation.y = -Math.PI / 2;        // its +X forward -> the diver's +Z forward
+    veh.position.set(0, 0.55, 0.45);      // held in front of the prone swimmer
+    this.mesh.add(veh); this._veh = veh;
+  }
+
   get magnetRadius() { return this.economy.statValue('magnet'); }
 
   update(dt, input, mode = 'level') {
-    const baseSpeed = this.economy.statValue('speed');
+    let baseSpeed = this.economy.statValue('speed');
+    // EQUIPPED SEA VEHICLE: functional swim-speed boost during dives (escape sharks easier).
+    if (mode === 'level') {
+      baseSpeed *= (1 + this.economy.vehicleSpeedBonus());
+      if (!this._vehAttached) { this._vehAttached = true; this._attachVehicle(); }
+    }
     const sprintMult = this.economy.statValue('sprint');
     let speed = baseSpeed;
 

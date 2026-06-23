@@ -10,10 +10,10 @@ export const WORLD = {
 export const SHARK_TYPES = {
   normal:    { name: 'Normal Shark',    color: 0x6c7a89, speed: 7.5,  scale: 1.0 },
   fast:      { name: 'Fast Shark',      color: 0x4a90d9, speed: 10.5, scale: 0.9 },
-  mutant:    { name: 'Mutant Shark',    color: 0x7bed9f, speed: 9.0,  scale: 1.15 },
+  mutant:    { name: 'Mutant Shark',    color: 0x7bed9f, speed: 8.4,  scale: 1.15 },
   hammerhead:{ name: 'Hammerhead',      color: 0x95a5a6, speed: 8.5,  scale: 1.1 },
   ghost:     { name: 'Ghost Shark',     color: 0xdfe6e9, speed: 9.5,  scale: 1.0 },
-  boss:      { name: 'Boss Shark',      color: 0x2d3436, speed: 8.0,  scale: 2.2 },
+  boss:      { name: 'Boss Shark',      color: 0x2d3436, speed: 9.5,  scale: 2.2 },
   kraken:    { name: 'Kraken Boss',     color: 0x130f40, speed: 9.0,  scale: 3.2 },
 };
 
@@ -30,7 +30,7 @@ export const LEVELS = [
     // Central divider wall splits the field into LEFT (risky/fast) and RIGHT (safe/slow) lanes.
     barriers: [{ x: 0, z: 35, hx: 2.5, hz: 50 }],
     objective: 'Pick a lane: LEFT (shark close) or RIGHT (longer, more coral)' },
-  { id: 5, name: 'Boss Arena',     coinsToWin: 0,  boss: 'boss', bossHp: 5, hazards: 7, corals: 0, objective: 'Bait the BOSS into the sharp rocks!' },
+  { id: 5, name: 'Boss Arena',     coinsToWin: 0,  boss: 'boss', bossHp: 8, hazards: 7, corals: 0, objective: 'Bait the BOSS into the sharp rocks!' },
   { id: 6, name: 'Final Escape',   coinsToWin: 0,  boss: 'kraken', tsunami: true, corals: 6, objective: 'Reach the LUXURY CAR before the TSUNAMI hits!' },
 ];
 
@@ -68,12 +68,14 @@ export const ACCESSORIES = [
   { id: 'jetpack',    name: 'Jetpack',        cost: 2500 },
 ];
 
+// SEA VEHICLES — dive gear sold at the Garage. The EQUIPPED one is functional: it boosts your
+// swim speed in dives (escape sharks more easily). Pricier = bigger boost.
 export const VEHICLES = [
-  { id: 'atv',    name: 'ATV',        color: 0xe74c3c, cost: 700 },
-  { id: 'buggy',  name: 'Buggy',      color: 0xf39c12, cost: 1800 },
-  { id: 'jeep',   name: 'Jeep',       color: 0x27ae60, cost: 4000 },
-  { id: 'sports', name: 'Sports Car', color: 0x2980b9, cost: 9000 },
-  { id: 'luxury', name: 'Luxury Car', color: 0xffd166, cost: 18000 },
+  { id: 'fins',    name: 'Power Fins',     color: 0x2ecc71, cost: 700,   speedBonus: 0.10 },
+  { id: 'scooter', name: 'Sea Scooter',    color: 0xf39c12, cost: 1800,  speedBonus: 0.20 },
+  { id: 'jetski',  name: 'Jet Ski',        color: 0xe74c3c, cost: 4000,  speedBonus: 0.32 },
+  { id: 'sled',    name: 'Dive Sled',      color: 0x9b59b6, cost: 9000,  speedBonus: 0.45 },
+  { id: 'minisub', name: 'Mini Submarine', color: 0x2ec4ff, cost: 18000, speedBonus: 0.60 },
 ];
 
 // Each achievement now pays a one-time reward (scaled by difficulty) when unlocked.

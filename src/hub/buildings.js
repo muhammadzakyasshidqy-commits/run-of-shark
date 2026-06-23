@@ -34,13 +34,16 @@ export function makeBank() {
     const col = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 5, 8), mat(0xffffff));
     col.position.set(x, 2.5, 3.6); g.add(col);
   }
-  // pediment (triangular gable) on top of the columns
-  const ped = new THREE.Mesh(new THREE.ConeGeometry(6.2, 2, 4), mat(0xc0392b));
-  ped.rotation.y = Math.PI / 4; ped.position.set(0, 6, 1); ped.scale.set(1, 1, 0.55); g.add(ped);
-  // big gold COIN ($) emblem on the gable — instantly "bank"
+  // SYMMETRIC hip roof centred on the 10x7 body (4-sided cone rotated 45° so its flat faces
+  // align with the walls + overhang as eaves). Replaces the old squashed off-centre cone.
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(7.2, 3.2, 4), mat(0xc0392b));
+  roof.rotation.y = Math.PI / 4; roof.position.set(0, 6.7, 0); g.add(roof);
+  const ridge = new THREE.Mesh(new THREE.SphereGeometry(0.35, 10, 8), mat(0xffd166, false, { metalness: 0.6 }));
+  ridge.position.set(0, 8.4, 0); g.add(ridge);
+  // big gold COIN ($) emblem centred on the FRONT gable — instantly reads "bank"
   const coin = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.3, 20), mat(0xffd166, false, { metalness: 0.6, emissive: 0x4a3500 }));
-  coin.rotation.x = Math.PI / 2; coin.position.set(0, 6.2, 3.5); g.add(coin);
-  const dollar = makeSign('$', 1.6, '#ffd166', '#7a5a00'); dollar.position.set(0, 6.2, 3.68); g.add(dollar);
+  coin.rotation.x = Math.PI / 2; coin.position.set(0, 5.7, 3.6); g.add(coin);
+  const dollar = makeSign('$', 1.6, '#ffd166', '#7a5a00'); dollar.position.set(0, 5.7, 3.78); g.add(dollar);
   // round VAULT door set into the facade
   const vault = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.4, 20), mat(0x9aa3ab, false, { metalness: 0.7 }));
   vault.rotation.x = Math.PI / 2; vault.position.set(0, 2.2, 3.55); g.add(vault);

@@ -10,13 +10,13 @@ Models are stored as `.glb` in `public/models/` and loaded at runtime via `GLTFL
 ## Vehicles — "Ultimate Modular Cars" / LowPoly Cars bundle (Quaternius, CC0)
 Source bundle: https://poly.pizza/bundle/Cars-Bundle-FE5IWe6OMk
 
-| Garage tier | File | poly.pizza model |
+| Used for | File | poly.pizza model |
 |---|---|---|
-| ATV (cheapest) | `car_atv.glb` | Hatchback — https://poly.pizza/m/unqqkULtRU |
-| Buggy | `car_buggy.glb` | Sedan — https://poly.pizza/m/OyqKvX9xNh |
-| Jeep | `car_jeep.glb` | SUV / Wagon — https://poly.pizza/m/xsMtZhBkxL |
-| Sports Car | `car_sports.glb` | Sports Coupe — https://poly.pizza/m/1mkmFkAz5v |
-| Luxury Car (+ L6 ending) | `car_luxury.glb` | Luxury Sedan — https://poly.pizza/m/Cz6yDaUcM9 |
+| Luxury Car — Level-6 escape prize only | `car_luxury.glb` | Luxury Sedan — https://poly.pizza/m/Cz6yDaUcM9 |
+
+> The Garage now sells **procedural SEA VEHICLES** (Power Fins / Sea Scooter / Jet Ski / Dive Sled /
+> Mini-Submarine — built in `Models.makeSeaVehicle`, no external asset). The earlier land-car GLBs
+> (atv/buggy/jeep/sports) were removed to save ~600KB since they're no longer used.
 
 ## Sea creatures — "Animated Fish Bundle" (Quaternius, CC0)
 Source bundle: https://poly.pizza/bundle/Animated-Fish-Bundle-ZkGbjS8m8g

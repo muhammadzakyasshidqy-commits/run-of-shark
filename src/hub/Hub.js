@@ -3,7 +3,7 @@
 // (showBank/showShop/showGarage/showLevels/showWheel) — only the way IN changed.
 import * as THREE from 'three';
 import { makeBank, makeGarage, makeTower, makeZoneMarker, makeNPC, makeSign, makeLuckyWheel, makeKiosk } from './buildings.js';
-import { makeDock, makeBoat, makeCar } from '../entities/Models.js';
+import { makeDock, makeBoat, makeSeaVehicle } from '../entities/Models.js';
 import { VEHICLES } from '../config.js';
 
 const CENTER = { x: 0, z: -12 };
@@ -41,6 +41,13 @@ export class Hub {
         new THREE.MeshStandardMaterial({ color: 0xcdb58a, flatShading: true }));
       path.rotation.y = rot; this.add(path, CENTER.x, 0.06, CENTER.z);
     }
+    // Branch walkways so every district connects to the plaza by a PATH (not random grass).
+    const pathMat = new THREE.MeshStandardMaterial({ color: 0xcdb58a, flatShading: true });
+    const addPath = (x, z, w, l) => this.add(new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, l), pathMat), x, 0.06, z);
+    addPath(20, -4, 30, 5);    // plaza -> shop district (along x)
+    addPath(34, -4, 5, 38);    // shop-front street linking SKINS/GEAR/UPGRADES (along z)
+    addPath(-20, -12, 32, 5);  // plaza -> financial plaza (along x)
+    addPath(-31, -6, 5, 28);   // bank/wheel front street (along z)
 
     // Structures + their trigger zones
     const tower = makeTower(this.save.data.highestLevel || 1); this.add(tower, 0, 0, -32);
@@ -87,13 +94,12 @@ export class Hub {
     this.vehicleCars = {};
     const SPACING = 5.8;                                       // > 2*zoneR(2.6) so adjacent zones keep a clear gap
     const gx = -((VEHICLES.length - 1) * SPACING) / 2;         // left end so the row is centred on x=0
-    const CAR_MODELS = { atv: 'car_atv', buggy: 'car_buggy', jeep: 'car_jeep', sports: 'car_sports', luxury: 'car_luxury' };
     VEHICLES.forEach((v, i) => {
       const owned = (this.save.data.ownedVehicles || []).includes(v.id);
-      const car = makeCar(CAR_MODELS[v.id] || v.color);        // distinct GLB per tier (falls back to primitive)
+      const car = makeSeaVehicle(v.id, v.color);               // distinct primitive sea craft per tier
       if (!owned) car.traverse((o) => { if (o.isMesh && o.material) { o.material.transparent = true; o.material.opacity = 0.45; } }); // ghost = not bought
       const cx = gx + i * SPACING, cz = gz;
-      this.add(car, cx, 0.2, cz); car.rotation.y = -Math.PI / 2; // face +Z (toward the approaching player)
+      this.add(car, cx, 0.7, cz); car.rotation.y = -Math.PI / 2; // face +Z (toward the approaching player)
       this.vehicleCars[v.id] = { car, color: v.color };
       this._zone('veh:' + v.id, 'veh:' + v.id, cx, cz + 3, 2.6, owned ? 0x2ecc71 : 0xffd166); // zone on player side
     });
@@ -101,8 +107,13 @@ export class Hub {
     // Dock + wooden boat at the front — the clearly-labelled "start dive" point. The boat sits
     // centred (x=0) at the SEAWARD tip of the 16-long dock (z=30±8 → tip z≈37) and points out to
     // sea (+Z), so it reads unmistakably as "board here to dive".
-    const dock = makeDock(16); this.add(dock, 0, 0, 30);
-    const boat = makeBoat(); this.add(boat, 0, 0.5, 37); boat.rotation.y = -Math.PI / 2;
+    // Long pier reaching PAST the beach to the sea; a sea disc at the head so the boat floats
+    // in water (not parked on the dock planks), with the boat lowered to sit IN the water.
+    const dock = makeDock(30); this.add(dock, 0, 0, 38);
+    const sea = new THREE.Mesh(new THREE.CircleGeometry(26, 40),
+      new THREE.MeshStandardMaterial({ color: 0x2e8bc0, flatShading: true, roughness: 0.4, transparent: true, opacity: 0.95 }));
+    sea.rotation.x = -Math.PI / 2; this.add(sea, 0, 0.05, 62);
+    const boat = makeBoat(); this.add(boat, 0, -0.18, 55); boat.rotation.y = -Math.PI / 2; // floats at the pier tip
     this.add(makeSign('DOCK — START DIVE', 7, '#10243a', '#06d6a0'), 0, 2.4, 22);
     this._zone('dock', 'levels', 0, 26, 5, 0x06d6a0);
 
@@ -114,8 +125,8 @@ export class Hub {
       this.add(post, CENTER.x + Math.cos(a) * (ISLAND_R - 1), 0.5, CENTER.z + Math.sin(a) * (ISLAND_R - 1));
     }
 
-    // a few palms for life
-    for (const [x, z] of [[-20, 14], [22, 12], [-46, -36], [44, -40]]) {
+    // a few palms for life — kept clear of the shop fronts/paths so none block a trigger zone.
+    for (const [x, z] of [[-23, 22], [23, 22], [-47, -34], [46, -38]]) {
       const t = new THREE.Group();
       const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.4, 4, 6), new THREE.MeshStandardMaterial({ color: 0x8a5a2b, flatShading: true }));
       trunk.position.y = 2; t.add(trunk);

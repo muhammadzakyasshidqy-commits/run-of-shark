@@ -16,10 +16,7 @@ import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.j
 // fit = target length in world units (matches the old primitive footprint);
 // yaw = rotation (rad) baked so the model's "forward" points +X (our car convention).
 const MANIFEST = {
-  car_atv:    { url: '/models/car_atv.glb',    fit: 3.4, yaw: 0 },
-  car_buggy:  { url: '/models/car_buggy.glb',  fit: 3.5, yaw: 0 },
-  car_jeep:   { url: '/models/car_jeep.glb',   fit: 3.6, yaw: 0 },
-  car_sports: { url: '/models/car_sports.glb', fit: 3.5, yaw: 0 },
+  // Garage now sells procedural SEA VEHICLES; the only car GLB still used is the L6 luxury prize.
   car_luxury: { url: '/models/car_luxury.glb', fit: 3.8, yaw: 0 },
   // Animated fish (skinned, built-in swim clip). yaw chosen so the snout points LOCAL +X
   // (Shark.js faces movement via rotation.y = atan2(-dz, dx), i.e. a +X-facing model).

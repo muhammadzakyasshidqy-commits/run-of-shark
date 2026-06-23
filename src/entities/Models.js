@@ -397,6 +397,46 @@ export function makeSubmarine() {
   return g;
 }
 
+// SEA VEHICLES — distinct low-poly dive craft (procedural). Each clearly reads as its name so
+// the showroom display matches the label. Faces +X (forward) to match the showroom convention.
+export function makeSeaVehicle(id = 'scooter', color = 0xf39c12) {
+  const g = new THREE.Group();
+  const prop = (x) => { // spinning propeller marker
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.2, 8), mat(0x333333)); hub.rotation.z = Math.PI / 2; hub.position.set(x, 0, 0); g.add(hub);
+    for (let i = 0; i < 3; i++) { const bl = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.16), mat(0x222222)); bl.position.set(x, 0, 0); bl.rotation.x = (i / 3) * Math.PI * 2; g.add(bl); }
+  };
+  if (id === 'fins') {                       // a pair of swim fins
+    for (const s of [-0.35, 0.35]) {
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 0.7), mat(color, true, { roughness: 0.5 }));
+      blade.position.set(-0.4, 0, s); blade.rotation.z = 0.25; g.add(blade);
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.5), mat(0x222a33)); foot.position.set(0.5, 0, s); g.add(foot);
+    }
+  } else if (id === 'scooter') {             // handheld sea scooter: tube body + nose + handles + prop
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.4, 6, 10), mat(color)); body.rotation.z = Math.PI / 2; g.add(body);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.7, 12), mat(0xf1c40f)); nose.rotation.z = -Math.PI / 2; nose.position.x = 1.3; g.add(nose);
+    for (const s of [-0.5, 0.5]) { const hbar = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.5, 6), mat(0x222a33)); hbar.position.set(-0.4, 0.35, s); g.add(hbar); }
+    prop(-1.4);
+  } else if (id === 'jetski') {              // jet ski: hull + seat + handlebars
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.5, 1.0), mat(color)); hull.position.y = 0.1; g.add(hull);
+    const bow = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.0, 4), mat(color)); bow.rotation.z = -Math.PI / 2; bow.position.set(1.6, 0.2, 0); bow.scale.set(1, 0.6, 0.9); g.add(bow);
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.4, 0.8), mat(0x222a33)); seat.position.set(-0.4, 0.5, 0); g.add(seat);
+    const col = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, 0.3), mat(0x2c3e50)); col.position.set(0.7, 0.6, 0); g.add(col);
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.9, 6), mat(0x111)); bar.rotation.x = Math.PI / 2; bar.position.set(0.7, 0.9, 0); g.add(bar);
+  } else if (id === 'sled') {                // dive sled: platform + windscreen + twin props
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.3, 1.6), mat(color)); deck.position.y = 0.2; g.add(deck);
+    const screen = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.8, 1.4), mat(0x7fd3ff, false, { metalness: 0.4, roughness: 0.1, transparent: true, opacity: 0.6 })); screen.position.set(1.0, 0.7, 0); screen.rotation.z = -0.4; g.add(screen);
+    for (const s of [-0.55, 0.55]) { const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.9, 10), mat(0x2c3e50)); pod.rotation.z = Math.PI / 2; pod.position.set(-0.9, 0.2, s); g.add(pod); prop(-1.5); }
+  } else {                                   // minisub: yellow submarine
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.7, 1.8, 8, 12), mat(color)); body.rotation.z = Math.PI / 2; body.position.y = 0.2; g.add(body);
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 0.6, 10), mat(0xf39c12)); tower.position.set(-0.2, 1.0, 0); g.add(tower);
+    const port = new THREE.Mesh(new THREE.CircleGeometry(0.28, 12), mat(0x2ec4ff, false, { emissive: 0x114 })); port.position.set(1.3, 0.3, 0.01); port.rotation.y = 0; g.add(port);
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.7, 4), mat(0xf39c12)); fin.rotation.z = Math.PI / 2; fin.position.set(-1.7, 0.2, 0); fin.scale.set(0.5, 1, 1); g.add(fin);
+    prop(-1.9);
+  }
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+
 export function makeShip() {
   const g = new THREE.Group();
   const hull = new THREE.Mesh(new THREE.BoxGeometry(11, 3, 4.2), mat(0x8a9aa3));

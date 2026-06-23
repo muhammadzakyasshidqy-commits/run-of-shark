@@ -322,14 +322,14 @@ export class Game {
       boat.position.z = z; this.player.pos.z = z; this.player.pos.x = boat.position.x;
       this.player.pos.y = boat.position.y + 0.6;
       if (k >= 1 && !dived) { dived = true; this.effects.burst(this.player.pos, 0x9fd8ff, 16); this.audio.pickup(); }
-      if (dived) this.player.pos.y = 0.2; // splashed into the water
+      if (dived) this.player.pos.y += (1.2 - this.player.pos.y) * Math.min(1, dt * 4); // ease INTO the water column (no steep plunge)
       // chase-style camera behind the boat
       this.camYaw = 0;
       this.camera.position.lerp(new THREE.Vector3(boat.position.x, this.camHeight, z - this.camRadius), Math.min(1, dt * 3));
-      this.camera.lookAt(boat.position.x, 1, z + this.camAhead);
+      this.camera.lookAt(boat.position.x, 1.4, z + this.camAhead);
       if (t >= dur) {
         this.onCine(null); this.cinematic = null; this.controlLocked = false;
-        this.player.pos.set(boat.position.x, 0.2, divePoint); // begin swim here (numeric divePoint)
+        this.player.pos.set(boat.position.x, 1.3, divePoint); // begin swim in the water column (matches level float)
         return true;
       }
       return false;

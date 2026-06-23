@@ -67,15 +67,22 @@ export class UI {
     this.open(() => {
       const s = h('div', 'screen'); const card = h('div', 'card');
       const owned = this.economy.s.ownedVehicles.includes(id);
-      card.appendChild(h('h2', 'head', `🚗 ${v ? v.name : 'Vehicle'}`));
-      card.appendChild(h('div', 'subtitle', owned ? 'You own this vehicle.' : `Price: 🪙 ${v.cost}`));
+      const equipped = this.economy.s.equippedVehicle === id;
+      card.appendChild(h('h2', 'head', `🌊 ${v ? v.name : 'Sea Vehicle'}`));
+      card.appendChild(h('div', 'subtitle', `+${Math.round((v.speedBonus || 0) * 100)}% swim speed when equipped`));
+      card.appendChild(h('div', 'subtitle', owned ? (equipped ? 'EQUIPPED — active on dives.' : 'Owned. Equip to use it.') : `Price: 🪙 ${v.cost}`));
       card.appendChild(h('div', 'chip coin-chip', `🪙 ${this.economy.s.coins}`));
       const r = h('div', 'row');
-      if (owned) r.appendChild(h('div', 'btn green small', '✓ Owned'));
-      else r.appendChild(this.btn(`Buy (🪙 ${v.cost})`, 'gold', () => {
-        if (this.economy.buyVehicle(id)) { this.game.hub?.markVehicleOwned(id); this.toast(`${v.name} bought!`); this.showVehicle(id); }
-        else this.toast('Not enough coins');
-      }));
+      if (!owned) {
+        r.appendChild(this.btn(`Buy (🪙 ${v.cost})`, 'gold', () => {
+          if (this.economy.buyVehicle(id)) { this.game.hub?.markVehicleOwned(id); this.toast(`${v.name} bought & equipped!`); this.showVehicle(id); }
+          else this.toast('Not enough coins');
+        }));
+      } else if (equipped) {
+        r.appendChild(h('div', 'btn green small', '✓ Equipped'));
+      } else {
+        r.appendChild(this.btn('Equip', 'gold', () => { this.economy.equipVehicle(id); this.toast(`${v.name} equipped!`); this.showVehicle(id); }));
+      }
       card.appendChild(r);
       card.appendChild(h('div', 'row', '')); card.appendChild(this.back());
       s.appendChild(card); return s;

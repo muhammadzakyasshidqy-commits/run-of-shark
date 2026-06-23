@@ -88,7 +88,19 @@ export class Economy {
     const v = VEHICLES.find((x) => x.id === id);
     if (!v || this.s.ownedVehicles.includes(id)) return false;
     if (!this.spendCoins(v.cost)) return false;
-    this.s.ownedVehicles.push(id); this.notify(); return true;
+    this.s.ownedVehicles.push(id);
+    if (!this.s.equippedVehicle) this.s.equippedVehicle = id; // auto-equip your first vehicle
+    this.notify(); return true;
+  }
+  // Equip an OWNED sea vehicle (or pass null to unequip). The equipped one boosts dive speed.
+  equipVehicle(id) {
+    if (id != null && !this.s.ownedVehicles.includes(id)) return false;
+    this.s.equippedVehicle = id; this.notify(); return true;
+  }
+  // Fractional swim-speed boost from the equipped vehicle (0 if none).
+  vehicleSpeedBonus() {
+    const v = VEHICLES.find((x) => x.id === this.s.equippedVehicle);
+    return v ? (v.speedBonus || 0) : 0;
   }
 
   // --- achievements ---

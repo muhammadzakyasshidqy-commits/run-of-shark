@@ -30,10 +30,11 @@ export class BossController {
     this._gapCenter = 0;
     this.defeated = false;
 
-    // tunables (fair reaction windows)
-    this.idleTime = 1.5;
-    this.telegraphTime = 1.2;   // time the player has to read + position before the strike
-    this.recoverTime = 1.1;
+    // tunables (fair reaction windows). Harder boss: shorter idle/recover so it strikes more
+    // often, telegraph kept readable (1.05s) so a skilled player can still bait every charge.
+    this.idleTime = 1.0;
+    this.telegraphTime = 1.05;  // time the player has to read + position before the strike
+    this.recoverTime = 0.8;
 
     // callbacks (wired by Game/Level)
     this.onHit = () => {};      // (hp, maxHp)
