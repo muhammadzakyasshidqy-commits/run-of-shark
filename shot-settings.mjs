@@ -1,0 +1,10 @@
+import { chromium } from 'playwright';
+const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+const b = await chromium.launch();
+const p = await b.newPage({ viewport:{width:480,height:880} });
+await p.goto('http://localhost:5173/', { waitUntil:'networkidle' });
+await sleep(600);
+await p.evaluate(()=>{ window.__ROS.ui.showSettings(); const c=document.querySelector('.card'); if(c) c.scrollTop=0; });
+await sleep(300);
+await p.screenshot({ path:'settings2.png' });
+await b.close(); console.log('ok');

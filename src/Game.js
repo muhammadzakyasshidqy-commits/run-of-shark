@@ -561,13 +561,19 @@ export class Game {
   // with input held constant the player heading settles, so camYaw settles too. No drag,
   // no zoom, no modes — the player only ever touches the joystick.
   _updateCamera(dt, moving) {
+    // Control options (Settings): camera distance + whether the camera auto-rotates to follow
+    // the player's heading. Defaults (medium distance, follow ON) reproduce the original feel.
+    const s = (this.save && this.save.data && this.save.data.settings) || {};
+    const distMul = s.cameraDistance === 'near' ? 0.72 : s.cameraDistance === 'far' ? 1.4 : 1;
+    const radius = this.camRadius * distMul;
+    const follow = s.cameraFollow !== false;
     const tp = this.player.pos;
-    if (moving) {
+    if (moving && follow) {
       this.camYaw = this._lerpAngle(this.camYaw, this.player.mesh.rotation.y, Math.min(1, dt * 2.5));
     }
     const cp = Math.cos(this.camPitch), sp = Math.sin(this.camPitch);
     const fx = Math.sin(this.camYaw), fz = Math.cos(this.camYaw);
-    this._camPos.set(tp.x - fx * this.camRadius * cp, this.camBaseY + sp * this.camRadius, tp.z - fz * this.camRadius * cp);
+    this._camPos.set(tp.x - fx * radius * cp, this.camBaseY + sp * radius, tp.z - fz * radius * cp);
     this.camera.position.lerp(this._camPos, Math.min(1, dt * 4));
     if (this.shake > 0) {
       this.camera.position.x += (Math.random() - 0.5) * this.shake;

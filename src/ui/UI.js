@@ -612,7 +612,26 @@ export class UI {
 
       // Invert Y toggle (movement joystick)
       list.appendChild(mk('↕️ Invert Y Axis (move)', 'invertY'));
-      // Camera is fully automatic — no camera settings to configure.
+
+      // Camera distance (near / medium / far) — pulls the chase camera in or out.
+      if (set.cameraDistance == null) set.cameraDistance = 'medium';
+      const DIST = [['Near', 'near'], ['Medium', 'medium'], ['Far', 'far']];
+      const distRow = h('div', 'item');
+      distRow.appendChild(h('div', 'name', '🎥 Camera Distance'));
+      const distBtns = h('div', 'row');
+      DIST.forEach(([label, val]) => {
+        const active = set.cameraDistance === val;
+        distBtns.appendChild(this.btn(label, `small ${active ? 'green' : 'ghost'}`, () => {
+          set.cameraDistance = val; this.save.markDirty(); this.showSettings();
+        }));
+      });
+      distRow.appendChild(distBtns);
+      list.appendChild(distRow);
+
+      // Camera auto-follow (default ON = camera swings behind you as you turn; OFF = fixed angle
+      // for players who prefer a steady view). Default stays the simple auto-follow feel.
+      if (set.cameraFollow == null) set.cameraFollow = true;
+      list.appendChild(mk('🧭 Camera Auto-Follow', 'cameraFollow'));
       card.appendChild(list);
 
       // Cloud login (guest by default). Magic-link flow; local save stays the fallback.
