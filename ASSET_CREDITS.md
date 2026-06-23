@@ -33,5 +33,21 @@ fast=blue (smaller), mutant=green (bigger), **hammerhead=grey (NO true T-head mo
 differentiated by tint/scale only)**, ghost=semi-transparent, boss=large dark great-white. The
 **kraken** uses the manta-ray mesh (scaled 3.2, near-black) to give the final boss a unique shape.
 
-<!-- Player diver (Quaternius character) credit added in the next phase. -->
+## Player diver — "Animated Base Character" (Quaternius, CC0)
+Source: https://poly.pizza/m/cwYvO5UauX — a fully-rigged humanoid with 40+ built-in clips.
+
+| Used for | File | Clips used |
+|---|---|---|
+| Player diver | `diver.glb` | `Idle_Loop`, `Walk_Loop`, `Sprint_Loop` (hub) · `Swim_Fwd_Loop`, `Swim_Idle_Loop` (levels) |
+
+- **Skin recolour** works live: the body material `M_Main` is flagged `outfit` and tinted to the
+  equipped skin colour (joints `M_Joints` keep their accent for character).
+- **Animation**: driven by `AnimationMixer` via `userData.setAnim()` — real walk on land and a real
+  front-crawl **swim** in the water (replaces the procedural rig; better than before).
+- **Accessories**: still equip/recolour/unequip correctly. KNOWN LIMITATION — the model's Rigify
+  armature scales its bones ~95× in their own space, so accessories can't be cheaply bone-parented
+  or head-tracked; they're parented to the model root at a best-fit head/torso height. At the
+  pulled-back chase-cam distance this reads fine, but in extreme close-ups a hat can float slightly
+  above the (deep-crouch idle) head. Fine-tuning head-accessory placement is a noted follow-up.
+
 

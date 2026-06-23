@@ -17,7 +17,43 @@ const capsule = (r, len, color, seg = 6) => new THREE.Mesh(new THREE.CapsuleGeom
 // compatible: each skin is just a different outfit colour on the SAME model).
 // userData.parts exposes pivots so Player.js can drive procedural walk/idle/hit anims.
 // ---------------------------------------------------------------------------
+// makeDiver: returns the animated Quaternius humanoid GLB when loaded — its body material
+// (M_Main) is tinted to the skin colour and flagged `outfit` so applyAppearance can recolour
+// it live; built-in clips (Idle/Walk/Sprint/Swim_Fwd/Swim_Idle) are driven by Player via
+// userData.setAnim()/mixer. Falls back to the procedural rigged diver below.
 export function makeDiver(color = 0x2ec4ff) {
+  const glb = getModel('diver');
+  if (glb) {
+    const anims = modelAnimations('diver');
+    const mixer = new THREE.AnimationMixer(glb);
+    const find = (re) => anims.find((a) => re.test(a.name));
+    const clipFor = { idle: find(/Idle_Loop$/i), walk: find(/Walk_Loop/i), sprint: find(/Sprint_Loop/i) || find(/Jog/i), swim: find(/Swim_Fwd_Loop/i), swimIdle: find(/Swim_Idle_Loop/i) };
+    const actions = {};
+    for (const k in clipFor) if (clipFor[k]) actions[k] = mixer.clipAction(clipFor[k]);
+    // tint body (M_Main) to skin colour + flag for live recolour; find head + spine bones so
+    // hats follow the head and backpacks/jetpacks ride the torso.
+    let head = null, body = null;
+    glb.traverse((o) => {
+      if (o.isMesh && o.material && !Array.isArray(o.material) && o.material.name === 'M_Main') {
+        o.material.color.setHex(color); o.userData.outfit = true;
+      }
+      if (o.isBone) { if (o.name === 'DEF-head') head = o; else if (!body && /spine/i.test(o.name)) body = o; }
+    });
+    glb.userData.mixer = mixer;
+    glb.userData.parts = { head, body };
+    let current = null;
+    glb.userData.currentClip = null;
+    glb.userData.setAnim = (name, fade = 0.18) => {
+      const next = actions[name] || actions.idle;
+      if (!next || next === current) return;
+      next.reset().fadeIn(fade).play();
+      if (current) current.fadeOut(fade);
+      current = next; glb.userData.currentClip = actions[name] ? name : 'idle';
+    };
+    if (actions.idle) { actions.idle.play(); current = actions.idle; glb.userData.currentClip = 'idle'; }
+    return glb;
+  }
+
   const g = new THREE.Group();
   const skinTone = 0xffc9a3;
   // BODY pivot at mid-body height (PIVOT_Y). The swim lean rotates THIS group, so the

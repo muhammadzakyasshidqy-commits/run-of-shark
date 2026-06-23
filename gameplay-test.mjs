@@ -20,16 +20,19 @@ const data = await p.evaluate(async () => {
   r.skinGreenHex = '0x' + outfitHex.toString(16);
 
   // ACCESSORY attaches to the mesh
+  const isGLB = !!g.player.mesh.userData.mixer;
+  r.diverIsGLB = isGLB;
   g.economy.s.equippedAccessory = 'crown'; g.refreshPlayerAppearance();
-  r.crownAttached = !!g.player._accessory && g.player._accessory.parent === g.player.mesh.userData.parts.head;
+  // GLB diver parents accessories to the model root; procedural parents head items to the head.
+  r.crownAttached = !!g.player._accessory && (g.player._accessory.parent === g.player.mesh || g.player._accessory.parent === g.player.mesh.userData.parts.head);
   g.economy.s.equippedAccessory = 'backpack'; g.refreshPlayerAppearance();
-  r.backpackOnBody = !!g.player._accessory && g.player._accessory.parent === g.player.mesh;
+  r.backpackOnBody = !!g.player._accessory && (g.player._accessory.parent === g.player.mesh || !!(g.player._accessory.parent && g.player._accessory.parent.isBone) || g.player._accessory.parent === g.player.mesh.userData.lean);
   // unequip clears it
   g.economy.s.equippedAccessory = null; g.refreshPlayerAppearance();
   r.unequipClears = g.player._accessory === null;
   g.economy.s.equippedAccessory = 'crown'; g.refreshPlayerAppearance(); // put crown back for the shot
 
-  // SWIM vs WALK: record lean (on the pivot group now) + WORLD head height to prove no nose-dive.
+  // SWIM vs WALK: prove distinct animation + no nose-dive (head stays near the surface).
   const headWorldY = () => {
     const h = g.player.mesh.userData.parts.head;
     g.player.mesh.updateWorldMatrix(true, true);   // matrices aren't auto-updated while paused
@@ -41,14 +44,18 @@ const data = await p.evaluate(async () => {
     const inp = { x: 0, z: 1, len: 1, sprint: false };
     g.player.pos.set(0, 0.2, -60);
     for (let i = 0; i < 60; i++) { g.player.pos.set(0, 0.2, -60); g.player.update(1 / 60, inp, mode); }
-    const lean = g.player.mesh.userData.lean;
-    return { leanX: +lean.rotation.x.toFixed(2), armL: +g.player.mesh.userData.parts.shL.rotation.x.toFixed(2), headWorldY: headWorldY() };
+    const ud = g.player.mesh.userData;
+    if (isGLB) return { clip: ud.currentClip, headWorldY: headWorldY() };
+    return { leanX: +ud.lean.rotation.x.toFixed(2), armL: +ud.parts.shL.rotation.x.toFixed(2), headWorldY: headWorldY() };
   };
   // idle head height (no movement) for comparison
   g.player.pos.set(0, 0.2, -60); for (let i = 0; i < 5; i++) g.player.update(1 / 60, { x: 0, z: 0, len: 0, sprint: false }, 'hub');
   r.idleHeadY = headWorldY();
   r.swim = drive('level');
   r.walk = drive('hub');
+  // animation differs between modes, and the head never nose-dives far below the surface
+  r.swimDiffersFromWalk = isGLB ? (r.swim.clip !== r.walk.clip) : (r.swim.leanX !== r.walk.leanX);
+  r.noNoseDive = r.swim.headWorldY > -1.5;
 
   // ACHIEVEMENT reward applies on unlock (coins_100 -> +60)
   g.economy.s.achievements = []; g.economy.s.totalCoins = 100; const c0 = g.economy.s.coins;

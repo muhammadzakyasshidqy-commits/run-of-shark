@@ -25,17 +25,19 @@ const MANIFEST = {
   // (Shark.js faces movement via rotation.y = atan2(-dz, dx), i.e. a +X-facing model).
   fish_shark: { url: '/models/fish_shark.glb', fit: 4.2, yaw: -Math.PI / 2 }, // snout -Z -> +X
   fish_manta: { url: '/models/fish_manta.glb', fit: 5.0, yaw: -Math.PI / 2 },
+  diver: { url: '/models/diver.glb', fit: 1.7, yaw: 0, fitBy: 'height' }, // standing humanoid
 };
 
 const cache = {};   // name -> { root: THREE.Group, animations: [], skinned: bool }
 let _ready = null;
 
-function buildRoot(scene, fit, yaw) {
-  // 1) scale to target footprint
+function buildRoot(scene, fit, yaw, fitBy) {
+  // 1) scale to target size — by horizontal footprint (vehicles/fish lie along the ground) or
+  // by height (a standing humanoid, whose tallest axis is Y).
   let box = new THREE.Box3().setFromObject(scene);
   const size = box.getSize(new THREE.Vector3());
-  const horiz = Math.max(size.x, size.z) || 1;
-  scene.scale.multiplyScalar(fit / horiz);
+  const ref = fitBy === 'height' ? (size.y || 1) : (Math.max(size.x, size.z) || 1);
+  scene.scale.multiplyScalar(fit / ref);
   // 2) re-centre on X/Z and ground on Y
   box = new THREE.Box3().setFromObject(scene);
   const c = box.getCenter(new THREE.Vector3());
@@ -57,7 +59,7 @@ export function loadAssets() {
   _ready = Promise.all(Object.entries(MANIFEST).map(([name, def]) =>
     loader.loadAsync(def.url).then((gltf) => {
       const skinned = (gltf.animations && gltf.animations.length > 0);
-      cache[name] = { root: buildRoot(gltf.scene, def.fit, def.yaw), animations: gltf.animations || [], skinned };
+      cache[name] = { root: buildRoot(gltf.scene, def.fit, def.yaw, def.fitBy), animations: gltf.animations || [], skinned };
     }).catch((e) => { console.warn('[assets] failed to load', name, e && e.message); })
   )).then(() => cache);
   return _ready;

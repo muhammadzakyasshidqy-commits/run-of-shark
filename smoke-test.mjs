@@ -32,11 +32,13 @@ out.fps = await page.evaluate(() => new Promise((res) => {
   requestAnimationFrame(tick);
 }));
 
-// 3) Start Level 1 via the real UI buttons
-await page.getByText('▶ PLAY', { exact: false }).click();
-await sleep(300);
-await page.getByText('Play', { exact: true }).first().click();
-await sleep(1500); // let fade + start
+// 3) Enter the island via the real menu button, then start Level 1 (hub->level is by walking
+//    into the dock zone, which a click can't drive, so kick the level off via the API).
+await page.getByText('ENTER ISLAND', { exact: false }).click();
+await sleep(800);
+out.enteredHub = await page.evaluate(() => window.__ROS.game.mode === 'hub');
+await page.evaluate(() => { const g = window.__ROS.game; g.startLevel(0); g.cinematic = null; g.controlLocked = false; });
+await sleep(1200); // let fade + start
 
 out.afterStart = await page.evaluate(() => {
   const g = window.__ROS.game;

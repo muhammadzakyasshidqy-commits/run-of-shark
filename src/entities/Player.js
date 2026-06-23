@@ -36,11 +36,27 @@ export class Player {
       const a = makeAccessory(accessoryId);
       if (a) {
         const parts = this.mesh.userData.parts;
-        // head items follow the head; body items attach to the lean group so a backpack/
-        // jetpack leans with the torso during the swim pose (offset down by the pivot height).
         let host, yOff = 0;
-        if (a.part === 'head' && parts?.head) { host = parts.head; }
-        else { host = this.mesh.userData.lean || this.mesh; yOff = -1.0; }
+        if (this.mesh.userData.mixer) {
+          // GLB diver: the Rigify armature scales bones ~95x in their own space, so neither
+          // bone-parenting nor reading bone world-positions places an accessory correctly.
+          // Parent to the model ROOT (clean transform/scale) and derive the head/torso height
+          // from the model's ACTUAL bounding box, so hats sit near the crown of the head
+          // regardless of the character's proportions.
+          host = this.mesh;
+          a.obj.scale.setScalar(0.7);
+          // Box3 reflects the BIND pose (upright); the animated clips crouch the head lower and
+          // the 95x-scaled Rigify bones can't be tracked cheaply, so the offset is a best-fit to
+          // the standing head. At the pulled-back chase-cam distance the small float is minor;
+          // exact head-accessory placement is a documented follow-up (see ASSET_CREDITS.md).
+          const box = new THREE.Box3().setFromObject(this.mesh);
+          const top = box.max.y - this.mesh.position.y;   // bind-pose head-top in root-local space
+          yOff = a.part === 'head' ? top - 0.5 : top * 0.45;
+        } else if (a.part === 'head' && parts?.head) {
+          host = parts.head;                        // procedural: head items follow the head
+        } else {
+          host = this.mesh.userData.lean || this.mesh; yOff = -1.0; // body items lean with torso
+        }
         a.obj.position.y += yOff;
         host.add(a.obj);
         this._accessory = a.obj;
@@ -77,11 +93,13 @@ export class Player {
       const targetRot = Math.atan2(input.x, input.z);
       this.mesh.rotation.y += this._angleDelta(this.mesh.rotation.y, targetRot) * Math.min(1, dt * 10);
     }
-    // swim bob
+    // swim bob (GLB diver carries its own vertical motion in-clip, so keep it subtle there)
     this._bob += dt * (input.len > 0.1 ? 10 : 3);
-    this.mesh.position.y = 0.2 + Math.sin(this._bob) * 0.12;
+    const bobAmp = this.mesh.userData.mixer ? 0.05 : 0.12;
+    this.mesh.position.y = 0.2 + Math.sin(this._bob) * bobAmp;
 
-    this._animate(dt, input.len, mode);
+    if (this.mesh.userData.mixer) this._animateGLB(dt, input, mode);
+    else this._animate(dt, input.len, mode);
 
     if (this.invuln > 0) {
       this.invuln -= dt;
@@ -92,6 +110,19 @@ export class Player {
     } else if (this._wasHit) {
       this._setHitFlash(false); this.mesh.visible = true; this._wasHit = false;
     }
+  }
+
+  // GLB diver: pick the built-in clip from mode + movement and advance the mixer. Levels use
+  // the real Swim_Fwd/Swim_Idle clips (the model swims horizontally on its own); the hub uses
+  // Idle/Walk/Sprint. No procedural lean — the clips already pose the body.
+  _animateGLB(dt, input, mode) {
+    const moving = input.len > 0.1;
+    const wantSprint = input.sprint && moving && this.stamina > 1;
+    let clip;
+    if (mode === 'level') clip = moving ? 'swim' : 'swimIdle';
+    else clip = moving ? (wantSprint ? 'sprint' : 'walk') : 'idle';
+    this.mesh.userData.setAnim(clip);
+    this.mesh.userData.mixer.update(dt);
   }
 
   // Two distinct procedural animations (no skeletal rig):
