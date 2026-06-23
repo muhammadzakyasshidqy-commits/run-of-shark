@@ -27,15 +27,20 @@ export function makeDiver(color = 0x2ec4ff) {
     const anims = modelAnimations('diver');
     const mixer = new THREE.AnimationMixer(glb);
     const find = (re) => anims.find((a) => re.test(a.name));
-    const clipFor = { idle: find(/Idle_Loop$/i), walk: find(/Walk_Loop/i), sprint: find(/Sprint_Loop/i) || find(/Jog/i), swim: find(/Swim_Fwd_Loop/i), swimIdle: find(/Swim_Idle_Loop/i) };
+    // Prefer the upright "talking" idle over the deep-crouch base Idle_Loop (the crouch looks
+    // odd standing in the hub and throws off head-accessory placement).
+    const clipFor = { idle: find(/Idle_Talking_Loop/i) || find(/Idle_Loop$/i), walk: find(/Walk_Loop/i), sprint: find(/Sprint_Loop/i) || find(/Jog/i), swim: find(/Swim_Fwd_Loop/i), swimIdle: find(/Swim_Idle_Loop/i) };
     const actions = {};
     for (const k in clipFor) if (clipFor[k]) actions[k] = mixer.clipAction(clipFor[k]);
-    // tint body (M_Main) to skin colour + flag for live recolour; find head + spine bones so
-    // hats follow the head and backpacks/jetpacks ride the torso.
+    // Style it as a DIVER, not a bare mannequin: body material (M_Main) = the skin/wetsuit
+    // colour (flagged outfit for live recolour); the joint accents (M_Joints, garish magenta by
+    // default) recoloured to a dark wetsuit tone so it reads as straps/seams. Find head + spine
+    // bones so hats follow the head and backpacks/jetpacks ride the torso.
     let head = null, body = null;
     glb.traverse((o) => {
-      if (o.isMesh && o.material && !Array.isArray(o.material) && o.material.name === 'M_Main') {
-        o.material.color.setHex(color); o.userData.outfit = true;
+      if (o.isMesh && o.material && !Array.isArray(o.material)) {
+        if (o.material.name === 'M_Main') { o.material.color.setHex(color); o.userData.outfit = true; o.material.roughness = 0.6; }
+        else if (o.material.name === 'M_Joints') { o.material.color.setHex(0x222a33); o.material.metalness = 0.2; }
       }
       if (o.isBone) { if (o.name === 'DEF-head') head = o; else if (!body && /spine/i.test(o.name)) body = o; }
     });
@@ -347,6 +352,8 @@ export function makeCoral(seed = 0) {
 // ---------------------------------------------------------------------------
 // WOODEN dinghy — brown planks (matches the dock), not teal. `wood` overridable.
 export function makeBoat(wood = 0xb07d4f) {
+  const glb = getModel('boat');           // clean low-poly wooden rowboat (Quaternius, CC0)
+  if (glb) return glb;
   const g = new THREE.Group();
   const dark = 0x8a5d36;
   const hull = new THREE.Mesh(new THREE.CapsuleGeometry(0.7, 2.4, 4, 8), mat(wood));

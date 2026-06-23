@@ -54,9 +54,12 @@ export class Level {
     this.submarine.position.set(subX, 0, WORLD.size - 14);
     this.scene.add(this.submarine);
 
-    // Ship near the goal (visual destination)
+    // Metal ship — the FINAL destination. Per the dive flow it must NOT be visible from the
+    // start: the player first swims to the submarine, and only then is the ship revealed (the
+    // submarine ferries them to it). Game._subToShip() flips this on with a pop-in.
     this.ship = makeShip();
     this.ship.position.set(40, 0, WORLD.size - 2);
+    this.ship.visible = false;
     this.scene.add(this.ship);
 
     // Split-route divider walls (solid, blocking) + per-lane bias

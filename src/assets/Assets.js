@@ -26,6 +26,7 @@ const MANIFEST = {
   fish_shark: { url: '/models/fish_shark.glb', fit: 4.2, yaw: -Math.PI / 2 }, // snout -Z -> +X
   fish_manta: { url: '/models/fish_manta.glb', fit: 5.0, yaw: -Math.PI / 2 },
   diver: { url: '/models/diver.glb', fit: 1.7, yaw: 0, fitBy: 'height' }, // standing humanoid
+  boat: { url: '/models/boat.glb', fit: 3.6, yaw: 0 },
 };
 
 const cache = {};   // name -> { root: THREE.Group, animations: [], skinned: bool }

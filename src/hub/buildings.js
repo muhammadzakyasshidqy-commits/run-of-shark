@@ -10,8 +10,13 @@ export function makeSign(text, w = 5, bg = '#0a3d62', fg = '#ffd166') {
   const ctx = cv.getContext('2d');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, 256, 64);
   ctx.strokeStyle = fg; ctx.lineWidth = 6; ctx.strokeRect(3, 3, 250, 58);
-  ctx.fillStyle = fg; ctx.font = 'bold 38px Trebuchet MS, sans-serif';
+  ctx.fillStyle = fg;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  // Auto-shrink the font so long labels (e.g. "DOCK — START DIVE") fit fully inside the
+  // 256px sign instead of being cropped at the edges.
+  let size = 40; const maxW = 232;
+  do { ctx.font = `bold ${size}px Trebuchet MS, sans-serif`; size -= 2; }
+  while (ctx.measureText(text).width > maxW && size > 12);
   ctx.fillText(text, 128, 34);
   const tex = new THREE.CanvasTexture(cv);
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 4),

@@ -46,29 +46,34 @@ export class Hub {
     const tower = makeTower(this.save.data.highestLevel || 1); this.add(tower, 0, 0, -32);
     this._zone('tower', 'levels', 0, -22, 6, 0x2ec4ff); this._solid(0, -32, 5);
 
-    // BANK (left) — also houses the Upgrade/Training counter (money + stat-boosts both fit here)
-    const bank = makeBank(); this.add(bank, -36, 0, -16);
+    // FINANCIAL PLAZA (left) — Bank + ATM + Lucky Wheel grouped tidily, all facing the central
+    // plaza (+X) so they read as one area you approach from the paths. Buildings face +X
+    // (rotation.y = +PI/2 turns the +Z-facing facade toward the player); teller stands out front.
+    const FACE_RIGHT = Math.PI / 2;   // a +Z-facing model now faces +X (toward plaza centre)
+    const bank = makeBank(); bank.rotation.y = FACE_RIGHT; this.add(bank, -36, 0, -16);
     this._zone('bank', 'bank', -30, -10, 5.5, 0xffd166); this._solid(-36, -16, 6);
-    this._npc(-30, -6, 0x2c3e50, 0x111111);  // bank teller
+    this._npc(-30.5, -16, 0x2c3e50, 0x111111, FACE_RIGHT);  // teller standing in front of the facade
 
-    // LUCKY WHEEL (left plaza, next to the Bank). Wheel + its single trigger ring are
-    // aligned: the player stands on the ring directly in FRONT of the wheel to spin it.
-    this.wheelObj = makeLuckyWheel(6); this.add(this.wheelObj, -34, 0, 2);
-    this.wheelObj.rotation.y = 0;            // face +Z (toward the player approaching)
-    this.add(makeSign('LUCKY WHEEL', 5, '#3a0d1a', '#ff6b6b'), -34, 7.4, 2);
-    this._zone('wheel', 'wheel', -34, 7, 4.2, 0xff6b6b);   // single ring (no duplicate)
-    this._npc(-39, 7, 0xff6b6b, 0xffd166);   // carnival barker beside the wheel
+    // LUCKY WHEEL just below the Bank, also facing the plaza; the player stands on the ring in
+    // FRONT of the wheel (+X side) to spin it.
+    this.wheelObj = makeLuckyWheel(6); this.add(this.wheelObj, -36, 0, 4);
+    this.wheelObj.rotation.y = FACE_RIGHT;   // disc faces +X (toward the approaching player)
+    this.add(makeSign('LUCKY WHEEL', 5, '#3a0d1a', '#ff6b6b'), -36, 7.4, 4);
+    this._zone('wheel', 'wheel', -30, 4, 4.2, 0xff6b6b);   // ring on the +X (plaza) side of the wheel
+    this._npc(-31, 8, 0xff6b6b, 0xffd166, FACE_RIGHT);   // carnival barker beside the wheel
 
-    // SHOP DISTRICT (right) — three SEPARATE physical kiosks, each its own trigger + NPC.
-    // Vehicles are intentionally NOT sold here anymore (garage-only).
-    const skinShop = makeKiosk('SKINS', 0x9b59b6, 0x2ec4ff); this.add(skinShop, 40, 0, -20); this._solid(40, -20, 5.5);
-    this._zone('skinshop', 'skins', 31, -18, 5, 0x9b59b6); this._npc(31, -14, 0x9b59b6, 0x2ec4ff);
+    // SHOP DISTRICT (right) — three SEPARATE kiosks facing the plaza (-X), each with its own
+    // trigger + a distinct shopkeeper standing in front (facing the player), so each reads as a
+    // staffed stall rather than an empty box with someone loitering beside it.
+    const FACE_LEFT = -Math.PI / 2;   // a +Z-facing kiosk now faces -X (toward plaza centre)
+    const skinShop = makeKiosk('SKINS', 0x9b59b6, 0x2ec4ff); skinShop.rotation.y = FACE_LEFT; this.add(skinShop, 40, 0, -20); this._solid(40, -20, 5.5);
+    this._zone('skinshop', 'skins', 31, -20, 5, 0x9b59b6); this._npc(36.5, -20, 0x9b59b6, 0x2ec4ff, FACE_LEFT);
 
-    const accShop = makeKiosk('GEAR', 0xf1c40f, 0xff9f43); this.add(accShop, 40, 0, -4); this._solid(40, -4, 5.5);
-    this._zone('accshop', 'accessories', 31, -4, 5, 0xf1c40f); this._npc(31, 0, 0xe67e22, 0xffffff);
+    const accShop = makeKiosk('GEAR', 0xf1c40f, 0xff9f43); accShop.rotation.y = FACE_LEFT; this.add(accShop, 40, 0, -4); this._solid(40, -4, 5.5);
+    this._zone('accshop', 'accessories', 31, -4, 5, 0xf1c40f); this._npc(36.5, -4, 0xe67e22, 0xffffff, FACE_LEFT);
 
-    const upgShop = makeKiosk('UPGRADES', 0x06d6a0, 0x2ecc71); this.add(upgShop, 40, 0, 12); this._solid(40, 12, 5.5);
-    this._zone('upgradeshop', 'upgrades', 31, 12, 5, 0x06d6a0); this._npc(31, 16, 0x16a085, 0xffd166);
+    const upgShop = makeKiosk('UPGRADES', 0x06d6a0, 0x2ecc71); upgShop.rotation.y = FACE_LEFT; this.add(upgShop, 40, 0, 12); this._solid(40, 12, 5.5);
+    this._zone('upgradeshop', 'upgrades', 31, 12, 5, 0x06d6a0); this._npc(36.5, 12, 0x16a085, 0xffd166, FACE_LEFT);
 
     // GARAGE SHOWROOM (BACK — behind the Tower, filling the previously-empty rear of the island).
     // Each vehicle is a PHYSICAL car you walk up to; standing by one opens a buy/own panel for
@@ -78,7 +83,7 @@ export class Hub {
     const canopy = makeGarage(this.save.data.ownedVehicles || []);
     this.add(canopy, 0, 0, gz - 4); canopy.scale.setScalar(1.8); // centred behind the row, covers its full width
     this.add(makeSign('GARAGE', 6, '#2c2c2c', '#ffffff'), 0, 6, gz + 3);
-    this._npc(15, gz, 0x34495e, 0xe74c3c);                     // mechanic to the side
+    this._npc(15, gz + 2, 0x34495e, 0xe74c3c, 0);              // mechanic beside the row, facing the player (+Z)
     this.vehicleCars = {};
     const SPACING = 5.8;                                       // > 2*zoneR(2.6) so adjacent zones keep a clear gap
     const gx = -((VEHICLES.length - 1) * SPACING) / 2;         // left end so the row is centred on x=0
@@ -127,9 +132,10 @@ export class Hub {
     this._npc(9, 6, 0xe67e22, 0x2c3e50);
   }
 
-  // Place a shopkeeper/villager NPC; colours vary so they aren't clones. Tracked for idle-bob.
-  _npc(x, z, shirt, hat) {
-    const npc = makeNPC(shirt, hat); npc.rotation.y = Math.random() * Math.PI * 2;
+  // Place a shopkeeper/villager NPC; colours vary so they aren't clones. `faceY` lets a
+  // shopkeeper face the player (toward the plaza); ambient villagers pass undefined => random.
+  _npc(x, z, shirt, hat, faceY) {
+    const npc = makeNPC(shirt, hat); npc.rotation.y = faceY != null ? faceY : Math.random() * Math.PI * 2;
     this.add(npc, x, 0, z); this.npcs.push(npc);
   }
 

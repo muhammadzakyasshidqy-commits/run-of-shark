@@ -32,26 +32,22 @@ export class Player {
       this.mesh.traverse((o) => { if (o.isMesh && o.userData.outfit) o.material.color.setHex(skinColor); });
     }
     if (this._accessory) { this._accessory.parent?.remove(this._accessory); this._accessory = null; }
+    this._accTrack = null;
     if (accessoryId) {
       const a = makeAccessory(accessoryId);
       if (a) {
         const parts = this.mesh.userData.parts;
         let host, yOff = 0;
         if (this.mesh.userData.mixer) {
-          // GLB diver: the Rigify armature scales bones ~95x in their own space, so neither
-          // bone-parenting nor reading bone world-positions places an accessory correctly.
-          // Parent to the model ROOT (clean transform/scale) and derive the head/torso height
-          // from the model's ACTUAL bounding box, so hats sit near the crown of the head
-          // regardless of the character's proportions.
+          // GLB diver: parent to the model ROOT (clean unit scale) and, every frame in update(),
+          // copy the relevant BONE's world position into the accessory (the bone drives the
+          // skinned head/torso, so this tracks the animated pose). Avoids the armature's 95x bone
+          // scale entirely. _accTrack carries the bone + a small world-space offset.
           host = this.mesh;
-          a.obj.scale.setScalar(0.7);
-          // Box3 reflects the BIND pose (upright); the animated clips crouch the head lower and
-          // the 95x-scaled Rigify bones can't be tracked cheaply, so the offset is a best-fit to
-          // the standing head. At the pulled-back chase-cam distance the small float is minor;
-          // exact head-accessory placement is a documented follow-up (see ASSET_CREDITS.md).
-          const box = new THREE.Box3().setFromObject(this.mesh);
-          const top = box.max.y - this.mesh.position.y;   // bind-pose head-top in root-local space
-          yOff = a.part === 'head' ? top - 0.5 : top * 0.45;
+          a.obj.scale.setScalar(0.5);
+          const bone = (a.part === 'head' ? parts?.head : parts?.body);
+          if (bone) { this._accTrack = { bone, dy: a.part === 'head' ? -0.08 : -0.1 }; }
+          else { yOff = a.part === 'head' ? 1.4 : 0.9; this._accTrack = null; }
         } else if (a.part === 'head' && parts?.head) {
           host = parts.head;                        // procedural: head items follow the head
         } else {
@@ -93,13 +89,28 @@ export class Player {
       const targetRot = Math.atan2(input.x, input.z);
       this.mesh.rotation.y += this._angleDelta(this.mesh.rotation.y, targetRot) * Math.min(1, dt * 10);
     }
-    // swim bob (GLB diver carries its own vertical motion in-clip, so keep it subtle there)
+    // Float height: in a dive level the diver floats up in the WATER COLUMN (so it reads as
+    // swimming, not dragging along the seabed); on land (hub) it stands at ground level. The
+    // base height eases between the two so entering/leaving the water doesn't pop. (pos.y is
+    // visual only — collision/goal/shark distances all use x/z.)
+    const targetBaseY = mode === 'level' ? 1.35 : 0.2;
+    this._baseY = this._baseY ?? 0.2;
+    this._baseY += (targetBaseY - this._baseY) * Math.min(1, dt * 3);
     this._bob += dt * (input.len > 0.1 ? 10 : 3);
     const bobAmp = this.mesh.userData.mixer ? 0.05 : 0.12;
-    this.mesh.position.y = 0.2 + Math.sin(this._bob) * bobAmp;
+    this.mesh.position.y = this._baseY + Math.sin(this._bob) * bobAmp;
 
     if (this.mesh.userData.mixer) this._animateGLB(dt, input, mode);
     else this._animate(dt, input.len, mode);
+
+    // Accessory follows its bone (GLB diver): the bone world position tracks the skinned head/
+    // torso, so copy it into the root-local accessory each frame + a small world-up offset.
+    if (this._accTrack && this._accessory) {
+      this.mesh.updateWorldMatrix(true, true);
+      const v = this._accTrack.bone.getWorldPosition(this._tmpV || (this._tmpV = new THREE.Vector3()));
+      this.mesh.worldToLocal(v);
+      this._accessory.position.set(v.x, v.y + this._accTrack.dy, v.z);
+    }
 
     if (this.invuln > 0) {
       this.invuln -= dt;

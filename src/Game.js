@@ -280,12 +280,16 @@ export class Game {
     this.player.mesh.visible = false;            // "boards" the submarine
     this.effects.burst(sub.position, 0x9fd8ff, 18);
     this.audio.win();
+    // Reveal the destination ship now (it was hidden during the dive) with a quick pop-in.
+    ship.visible = true; ship.scale.setScalar(0.01);
+    this.effects.burst(ship.position, 0xeceff1, 16);
     this.onCine({ title: 'ESCAPED!', sub: 'The submarine carries you to the ship…' });
     const start = sub.position.clone();
     const dest = new THREE.Vector3(ship.position.x, 1.2, ship.position.z - 4);
     const dur = 2.8; let t = 0;
     this.cinematic = (dt) => {
       t += dt; const k = Math.min(1, t / dur);
+      ship.scale.setScalar(Math.min(1, k * 2));  // ship grows in over the first half
       sub.position.lerpVectors(start, dest, k);  // sub travels to the ship
       sub.position.y = 0.2 + Math.sin(k * Math.PI) * 1.2; // surface arc
       const cam = new THREE.Vector3(sub.position.x - 10, 7, sub.position.z - 12);

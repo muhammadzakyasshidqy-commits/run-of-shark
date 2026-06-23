@@ -33,6 +33,13 @@ fast=blue (smaller), mutant=green (bigger), **hammerhead=grey (NO true T-head mo
 differentiated by tint/scale only)**, ghost=semi-transparent, boss=large dark great-white. The
 **kraken** uses the manta-ray mesh (scaled 3.2, near-black) to give the final boss a unique shape.
 
+## Dock boat — "Boat" (Quaternius, CC0)
+Source: https://poly.pizza/m/OknDJkGeJ8 — a clean low-poly wooden rowboat.
+
+| Used for | File |
+|---|---|
+| Dock dive-boat (hub) + dive-intro ride (levels) | `boat.glb` (`Models.makeBoat`) |
+
 ## Player diver — "Animated Base Character" (Quaternius, CC0)
 Source: https://poly.pizza/m/cwYvO5UauX — a fully-rigged humanoid with 40+ built-in clips.
 
@@ -42,12 +49,14 @@ Source: https://poly.pizza/m/cwYvO5UauX — a fully-rigged humanoid with 40+ bui
 
 - **Skin recolour** works live: the body material `M_Main` is flagged `outfit` and tinted to the
   equipped skin colour (joints `M_Joints` keep their accent for character).
+- **Styling**: body tinted to the skin/wetsuit colour; the default magenta joint accents recoloured
+  to a dark wetsuit tone so it reads as a diver, not a bare mannequin. Hub idle uses the upright
+  "talking" idle (the base idle is an odd deep crouch).
 - **Animation**: driven by `AnimationMixer` via `userData.setAnim()` — real walk on land and a real
-  front-crawl **swim** in the water (replaces the procedural rig; better than before).
-- **Accessories**: still equip/recolour/unequip correctly. KNOWN LIMITATION — the model's Rigify
-  armature scales its bones ~95× in their own space, so accessories can't be cheaply bone-parented
-  or head-tracked; they're parented to the model root at a best-fit head/torso height. At the
-  pulled-back chase-cam distance this reads fine, but in extreme close-ups a hat can float slightly
-  above the (deep-crouch idle) head. Fine-tuning head-accessory placement is a noted follow-up.
+  front-crawl **swim** in the water; in dive levels the diver floats up in the water column (not
+  dragging the seabed).
+- **Accessories**: equip/recolour/unequip work. Placement FIXED — accessories are parented to the
+  model root and follow the head/spine BONE world position every frame (Player.update), with the
+  armature's 95× bone scale sidestepped, so a hat now sits on the head and tracks the animation.
 
 
