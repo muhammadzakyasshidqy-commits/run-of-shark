@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { WORLD } from '../config.js';
 import { makeCoin, makeTreasure, makeCoral, makeBoat, makeSubmarine, makeShip, makeCar, makeLuxuryCar, makeHazard, makeDock } from '../entities/Models.js';
+import { makeSign } from '../hub/buildings.js';
 import { Shark } from '../entities/Shark.js';
 import { BossController } from '../bosses/BossController.js';
 
@@ -130,18 +131,38 @@ export class Level {
     if (this.def.id === 6) {
       this.submarine.visible = false;
       const goalZ = WORLD.size - 14;
-      // sandy safe pad lifting the car above the water so it's visible from afar
-      const pad = new THREE.Mesh(new THREE.CylinderGeometry(7, 8, 1.4, 16),
+      // bigger sandy SAFE PAD lifting the car above the water so it reads from across the field
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(10, 11, 1.6, 20),
         new THREE.MeshStandardMaterial({ color: 0xf2e2b8, flatShading: true, roughness: 1 }));
       pad.position.set(0, 0.2, goalZ); pad.receiveShadow = true; this.scene.add(pad); this.barriers.push(pad);
+      // The prize car, scaled UP into a clear landmark and turned to FACE the fleeing player
+      // (front = +Z, so rotation.y = PI presents its nose/headlights to someone swimming in from -Z).
       this.car = makeLuxuryCar(0xffd166);
-      this.car.position.set(0, 1.0, goalZ);
+      this.car.scale.setScalar(2.2);
+      this.car.rotation.y = Math.PI;
+      this.car.position.set(0, 1.1, goalZ);
       this.submarine.position.set(0, 0, goalZ);   // keep goal math centred on the pad
-      // pulsing beacon ring on the pad + a glow column (the GLB car also carries a light beam)
-      const beacon = new THREE.Mesh(new THREE.TorusGeometry(6, 0.3, 8, 24),
+      // BOLD beacon stack so the goal is unmistakable from anywhere on the field:
+      //  - a fat, bright, tall glow COLUMN
+      //  - a big pulsing ground ring
+      //  - a floating "ESCAPE CAR" sign high above, plus a down-arrow pointing at it
+      const beamCol = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 2.6, 46, 16, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false }));
+      beamCol.position.set(0, 23, goalZ); this.scene.add(beamCol); this.barriers.push(beamCol);
+      const beacon = new THREE.Mesh(new THREE.TorusGeometry(9, 0.5, 8, 28),
         new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xffaa00, emissiveIntensity: 1, flatShading: true }));
       beacon.rotation.x = -Math.PI / 2; beacon.position.set(0, 1.0, goalZ); this.scene.add(beacon); this.barriers.push(beacon);
       this._goalBeacon = beacon;
+      const sign = makeSign('🚗 ESCAPE CAR', 8, '#1a1205', '#ffd166'); sign.position.set(0, 14, goalZ);
+      // the player swims in from -Z, so turn the sign 180° to face them; viewed by a +Z-looking
+      // camera the text then reads correctly (DoubleSide so the panel renders from that side).
+      sign.rotation.y = Math.PI; sign.material.side = THREE.DoubleSide;
+      this.scene.add(sign); this.barriers.push(sign);
+      this._goalSign = sign;
+      const arrow = new THREE.Mesh(new THREE.ConeGeometry(1.4, 3, 5),
+        new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xff8800, emissiveIntensity: 1, flatShading: true }));
+      arrow.rotation.x = Math.PI; arrow.position.set(0, 9.5, goalZ); this.scene.add(arrow); this.barriers.push(arrow);
+      this._goalArrow = arrow;
       this.scene.add(this.car);
     }
 
@@ -262,8 +283,10 @@ export class Level {
         c.position.z += (player.pos.z - c.position.z) * Math.min(1, dt * 6);
       }
       if (d < 1.2) {
-        this.collected += c.userData.value;
-        this.economy.addCoins(c.userData.value);
+        // accessory coinMult (crown / backpack / pirate hat) raises every coin's payout
+        const val = Math.round(c.userData.value * this.economy.coinMultiplier());
+        this.collected += val;
+        this.economy.addCoins(val);
         c.userData.chest ? this.audio.pickup() : this.audio.coin();
         this.effects.burst(c.position, 0xffd166, c.userData.chest ? 18 : 10);
         this.scene.remove(c);

@@ -15,8 +15,10 @@ export class Player {
     this.stamina = economy.statValue('stamina');
     this.maxStamina = this.stamina;
     this.alive = true;
-    this.hp = 3 + Math.round(economy.statValue('resistance'));
+    // base 3 hearts + resistance upgrade + a helmet accessory's hpBonus (functional gear)
+    this.hp = 3 + Math.round(economy.statValue('resistance')) + economy.accessoryHpBonus();
     this.maxHp = this.hp;
+    this._dashCd = 0; this._dashTime = 0;   // jetpack dash timers (level mode)
     this._bob = 0;
     this._phase = 0;
     this.invuln = 0;
@@ -72,16 +74,18 @@ export class Player {
     this.mesh.add(veh); this._veh = veh;
   }
 
-  get magnetRadius() { return this.economy.statValue('magnet'); }
+  get magnetRadius() { return this.economy.statValue('magnet') + this.economy.accessoryMagnetBonus(); }
 
   update(dt, input, mode = 'level') {
     let baseSpeed = this.economy.statValue('speed');
-    // EQUIPPED SEA VEHICLE: functional swim-speed boost during dives (escape sharks easier).
+    // EQUIPPED GEAR is functional during dives: the sea VEHICLE and an accessory's speedBonus
+    // (jetpack) both raise swim speed; escape sharks more easily.
     if (mode === 'level') {
-      baseSpeed *= (1 + this.economy.vehicleSpeedBonus());
+      baseSpeed *= (1 + this.economy.vehicleSpeedBonus() + this.economy.accessorySpeedBonus());
       if (!this._vehAttached) { this._vehAttached = true; this._attachVehicle(); }
     }
-    const sprintMult = this.economy.statValue('sprint');
+    // sprint multiplier + an accessory's sprintBonus (military helmet / jetpack)
+    const sprintMult = this.economy.statValue('sprint') + (mode === 'level' ? this.economy.accessorySprintBonus() : 0);
     let speed = baseSpeed;
 
     const wantSprint = input.sprint && input.len > 0.1 && this.stamina > 1;
@@ -91,6 +95,16 @@ export class Player {
     } else {
       this.stamina = Math.min(this.maxStamina, this.stamina + 16 * dt);
     }
+
+    // JETPACK DASH: while sprinting in a dive, the jetpack fires a short forward BURST on a
+    // cooldown — a real escape move (decoupled from stamina). _dashTime>0 = burst active.
+    if (mode === 'level' && this.economy.hasDash()) {
+      this._dashCd -= dt;
+      if (this._dashTime > 0) this._dashTime -= dt;
+      if (wantSprint && this._dashCd <= 0) { this._dashTime = 0.45; this._dashCd = 2.6; }
+      if (this._dashTime > 0) { speed *= 1.9; this._dashFlare(true); } else this._dashFlare(false);
+    }
+    this._lastSpeed = speed;   // exposed for telemetry/tests (numeric proof of gear effect)
 
     this.vel.set(input.x, 0, input.z).multiplyScalar(speed);
     this.pos.x += this.vel.x * dt;
@@ -192,6 +206,17 @@ export class Player {
       if (parts.torso) parts.torso.scale.y = 1 + Math.sin(this._phase * 0.5) * 0.03;
     }
     if (parts.head) parts.head.rotation.z = Math.sin(this._phase * 0.5) * 0.05;
+  }
+
+  // Pulse the jetpack flame cones during a dash burst (visible "firing" feedback).
+  _dashFlare(on) {
+    if (!this._accessory) return;
+    this._accessory.traverse((o) => {
+      if (o.isMesh && o.userData.flame) {
+        o.scale.set(1, on ? 2.6 : 1, 1);
+        if (o.material && o.material.emissive) o.material.emissive.setHex(on ? 0xff5500 : 0x662200);
+      }
+    });
   }
 
   _setHitFlash(on) {

@@ -414,7 +414,9 @@ export class UI {
     items.forEach((x) => {
       const have = owned.includes(x.id);
       const it = h('div', 'item');
-      it.appendChild(h('div', null, `<div class="name">${x.name}</div><div class="lvl">${have ? 'Owned' : '🪙 ' + x.cost}</div>`));
+      // accessories advertise their FUNCTIONAL effect so the player knows what equipping does
+      const sub = (kind === 'accessory' && x.desc) ? `<div class="muted" style="font-size:11px">${x.desc}</div>` : '';
+      it.appendChild(h('div', null, `<div class="name">${x.name}</div><div class="lvl">${have ? 'Owned' : '🪙 ' + x.cost}</div>${sub}`));
       if (!have) {
         it.appendChild(this.btn('Buy', 'gold small', () => {
           const ok = kind === 'skin' ? this.economy.buySkin(x.id) : kind === 'accessory' ? this.economy.buyAccessory(x.id) : this.economy.buyVehicle(x.id);
@@ -523,25 +525,70 @@ export class UI {
   }
 
   // ---------- LUCKY WHEEL ----------
+  // Build the SVG wheel face: N coloured slices, each with its prize label, + a fixed top pointer.
+  // The visible <g class="wheel-rot"> is what we rotate to spin. Segment i is centred at angle
+  // (i+0.5)*seg measured CLOCKWISE from the TOP (pointer), so landing i means rotating the wheel
+  // by -(i+0.5)*seg (plus whole turns).
+  _buildWheelSvg() {
+    const N = WHEEL_PRIZES.length, seg = 360 / N, R = 110, C = 120;
+    const cols = ['#ff6b6b', '#4a90d9', '#06d6a0', '#feca57', '#9b59b6', '#ff9f43', '#2ec4ff', '#e84393'];
+    const polar = (deg, r) => { const a = (deg - 90) * Math.PI / 180; return [C + r * Math.cos(a), C + r * Math.sin(a)]; };
+    let slices = '';
+    for (let i = 0; i < N; i++) {
+      const a0 = i * seg, a1 = (i + 1) * seg;
+      const [x0, y0] = polar(a0, R), [x1, y1] = polar(a1, R);
+      const large = seg > 180 ? 1 : 0;
+      slices += `<path d="M${C},${C} L${x0.toFixed(1)},${y0.toFixed(1)} A${R},${R} 0 ${large} 1 ${x1.toFixed(1)},${y1.toFixed(1)} Z" fill="${cols[i % cols.length]}" stroke="#10243a" stroke-width="2"/>`;
+      const [lx, ly] = polar(a0 + seg / 2, R * 0.62);
+      const rot = a0 + seg / 2;                    // text radiates outward, readable
+      slices += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" transform="rotate(${rot.toFixed(1)} ${lx.toFixed(1)} ${ly.toFixed(1)})" fill="#10243a" font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="middle">${WHEEL_PRIZES[i].label}</text>`;
+    }
+    return `<svg width="240" height="240" viewBox="0 0 240 240" style="max-width:74vw">
+      <g class="wheel-rot" style="transform-origin:120px 120px;transition:transform 4s cubic-bezier(.17,.67,.18,1)">
+        ${slices}
+        <circle cx="120" cy="120" r="16" fill="#10243a"/>
+      </g>
+      <polygon points="120,8 108,30 132,30" fill="#ffd166" stroke="#10243a" stroke-width="2"/>
+      <circle cx="120" cy="120" r="6" fill="#ffd166"/>
+    </svg>`;
+  }
+
   showWheel() {
     this.open(() => {
       const s = h('div', 'screen'); const card = h('div', 'card');
       card.appendChild(h('h2', 'head', '🎡 Lucky Wheel'));
       card.appendChild(h('div', 'subtitle', 'Spin for coins, cash, or gems!'));
+      // The actual spinning wheel — all prizes visible on it, animates to the winning slice.
+      const wheelWrap = h('div', null, this._buildWheelSvg());
+      wheelWrap.style.cssText = 'display:flex;justify-content:center;margin:6px 0';
+      card.appendChild(wheelWrap);
+      const wheelG = wheelWrap.querySelector('.wheel-rot');
       const result = h('div', 'subtitle', '&nbsp;');
-      // The PHYSICAL wheel decides the result: pick the index, spin to land the pointer on
-      // it, then reveal+apply only after it stops. (Index is chosen here; the wheel is
-      // animated to match, so label shown == segment under the pointer.)
-      const doSpin = async (btn) => {
+      const N = WHEEL_PRIZES.length, seg = 360 / N;
+      this._wheelAngle = this._wheelAngle || 0;   // accumulate so each spin continues forward
+
+      // Pick the slice, spin the SVG wheel to land it under the top pointer, then apply+reveal.
+      const doSpin = (btn) => {
         if (this._wheelSpinning) return;
         this._wheelSpinning = true; btn.disabled = true; result.textContent = 'Spinning…';
-        const index = Math.floor(Math.random() * WHEEL_PRIZES.length);
-        const hub = this.game.hub;
-        if (hub && hub.spinWheel) await hub.spinWheel(index, WHEEL_PRIZES.length);
-        const prize = WHEEL_PRIZES[index];
-        prize.apply(this.economy);
-        result.textContent = `🎉 ${prize.label}`;
-        this._wheelSpinning = false; btn.disabled = false;
+        const index = Math.floor(Math.random() * N);
+        // land slice `index` centre at the top: target ≡ -(index+0.5)*seg (mod 360); add ≥5 turns.
+        const base = this._wheelAngle;
+        let target = -(index + 0.5) * seg;
+        while (target < base + 360 * 5) target += 360;
+        this._wheelAngle = target;
+        // also spin the physical hub wheel (visible if the player looks at it later)
+        if (this.game.hub && this.game.hub.spinWheel) this.game.hub.spinWheel(index, N);
+        requestAnimationFrame(() => { wheelG.style.transform = `rotate(${target}deg)`; });
+        const finish = () => {
+          wheelG.removeEventListener('transitionend', finish);
+          const prize = WHEEL_PRIZES[index];
+          prize.apply(this.economy);
+          result.innerHTML = `🎉 <b>${prize.label}</b>`;
+          this._wheelSpinning = false; btn.disabled = false;
+        };
+        wheelG.addEventListener('transitionend', finish);
+        setTimeout(() => { if (this._wheelSpinning) finish(); }, 4300); // safety if transitionend misses
       };
       const spinBtn = this.btn('Spin (💎 1)', 'gold', () => {
         if (this._wheelSpinning) return;

@@ -58,14 +58,22 @@ export const SKINS = [
   { id: 'golden',  name: 'Golden Suit',  color: 0xffd166, cost: 6000 },
 ];
 
+// Accessories are FUNCTIONAL: the EQUIPPED one applies its `effect` in dives (read by Economy
+// helpers -> Player/Level). One accessory equipped at a time. `effect` keys:
+//   hpBonus      extra max HP (survive more shark hits)
+//   speedBonus   fractional swim-speed (stacks with the equipped vehicle)
+//   sprintBonus  added to the sprint multiplier (stronger sprint)
+//   magnetBonus  extra coin-magnet radius (world units)
+//   coinMult     fractional bonus to every coin's value
+//   dash         jetpack: a periodic forward DASH burst while sprinting (escape move)
 export const ACCESSORIES = [
-  { id: 'sunglasses', name: 'Sunglasses',     cost: 200 },
-  { id: 'helmet',     name: 'Diving Helmet',  cost: 400 },
-  { id: 'backpack',   name: 'Backpack',       cost: 600 },
-  { id: 'crown',      name: 'Golden Crown',   cost: 2500 },
-  { id: 'piratehat',  name: 'Pirate Hat',     cost: 900 },
-  { id: 'milhelmet',  name: 'Military Helmet',cost: 1100 },
-  { id: 'jetpack',    name: 'Jetpack',        cost: 2500 },
+  { id: 'sunglasses', name: 'Sunglasses',     cost: 200,  effect: { magnetBonus: 2, coinMult: 0.05 },                 desc: '+2 coin magnet · +5% coin value' },
+  { id: 'helmet',     name: 'Diving Helmet',  cost: 400,  effect: { hpBonus: 2 },                                     desc: '+2 max HP — survive 2 more shark hits' },
+  { id: 'backpack',   name: 'Backpack',       cost: 600,  effect: { magnetBonus: 3, coinMult: 0.15 },                 desc: '+3 coin magnet · +15% coin value' },
+  { id: 'crown',      name: 'Golden Crown',   cost: 2500, effect: { coinMult: 0.30 },                                 desc: '+30% coin value' },
+  { id: 'piratehat',  name: 'Pirate Hat',     cost: 900,  effect: { coinMult: 0.18, magnetBonus: 1 },                 desc: '+18% coin value · +1 coin magnet' },
+  { id: 'milhelmet',  name: 'Military Helmet',cost: 1100, effect: { hpBonus: 1, sprintBonus: 0.15 },                  desc: '+1 max HP · +15% sprint power' },
+  { id: 'jetpack',    name: 'Jetpack',        cost: 2500, effect: { speedBonus: 0.18, sprintBonus: 0.35, dash: true }, desc: '+18% swim speed · +35% sprint · DASH burst' },
 ];
 
 // SEA VEHICLES — dive gear sold at the Garage. The EQUIPPED one is functional: it boosts your

@@ -38,6 +38,10 @@ export class Shark {
 
   setMaxHp(n) { this.maxHp = n; this.hp = n; }
 
+  // The shoreline sits ~12 past WORLD.beachZ (Game.shorelineZ); keep sharks a touch deeper than
+  // that so they patrol the water's edge but never slide onto the dry sand.
+  static SEA_EDGE_Z = WORLD.beachZ + 16;
+
   // Collision radius used for hazard/player overlap tests.
   get radius() { return (this.isBoss ? 1.4 : 1.0) * this.def.scale; }
 
@@ -58,6 +62,12 @@ export class Shark {
 
     if (this.isBoss && !this.externalControl) { this._updateBoss(dt, target); }
     else if (!this.isBoss) { this._chase(dt, target, this.speed); }
+
+    // Sharks STAY IN THE SEA — they never cross the shoreline onto the sand/beach. The water
+    // begins a little past WORLD.beachZ, so clamp the shark's Z to that sea edge: it stops at the
+    // water's edge instead of beaching. (Player x/z, goal + hazard math are all further out in +Z,
+    // so this only blocks the degenerate "shark on the sand" case near the dive start.)
+    if (this.pos.z < Shark.SEA_EDGE_Z) this.pos.z = Shark.SEA_EDGE_Z;
 
     this._swimAnim(dt);
     this.pos.y = (this.isBoss ? -0.4 : -0.5) + Math.sin(this._t * 2) * 0.15;
@@ -114,16 +124,16 @@ export class Shark {
         if (Math.random() < 0.5) this.onWave(this.pos.clone());
       }
     }
-    // keep inside bounds
+    // keep inside bounds (the sea-edge minimum is re-applied in update())
     const b = WORLD.size;
     this.pos.x = Math.max(-b, Math.min(b, this.pos.x));
-    this.pos.z = Math.max(WORLD.beachZ, Math.min(b, this.pos.z));
+    this.pos.z = Math.max(Shark.SEA_EDGE_Z, Math.min(b, this.pos.z));
   }
 
-  // The shark model's snout points along LOCAL +X. A rotation.y of θ maps local +X to
-  // world (cosθ, -sinθ) on the XZ plane, so to face the movement (dx,dz) we need
-  // rotation.y = atan2(-dz, dx). (The old atan2(dx,dz)+PI/2 was written for a +Z-facing
-  // model and left the shark ~180° off — it swam backwards/sideways.)
+  // The shark model's snout points along LOCAL +X — guaranteed by the baked yaw in Assets.js
+  // MANIFEST (fish yaw +PI/2, VERIFIED with a marker render: the GLB snout sits at local -X, so
+  // +PI/2 brings it to +X). A rotation.y of θ maps local +X to world (cosθ, -sinθ) on the XZ
+  // plane, so to make the HEAD lead the movement (dx,dz) we need rotation.y = atan2(-dz, dx).
   _face(dx, dz) { this.mesh.rotation.y = Math.atan2(-dz, dx); }
 
   // Called when the boss crashes into an arena hazard. Returns true if this hit killed it.

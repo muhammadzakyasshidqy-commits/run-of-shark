@@ -103,6 +103,19 @@ export class Economy {
     return v ? (v.speedBonus || 0) : 0;
   }
 
+  // --- accessory effects (the EQUIPPED accessory is functional in dives) ---
+  accessoryEffect() {
+    const a = ACCESSORIES.find((x) => x.id === this.s.equippedAccessory);
+    return (a && a.effect) || {};
+  }
+  accessoryHpBonus()     { return this.accessoryEffect().hpBonus || 0; }
+  accessorySpeedBonus()  { return this.accessoryEffect().speedBonus || 0; }
+  accessorySprintBonus() { return this.accessoryEffect().sprintBonus || 0; }
+  accessoryMagnetBonus() { return this.accessoryEffect().magnetBonus || 0; }
+  hasDash()              { return !!this.accessoryEffect().dash; }
+  // Multiplier applied to every coin's value (1.0 = no bonus).
+  coinMultiplier()       { return 1 + (this.accessoryEffect().coinMult || 0); }
+
   // --- achievements ---
   // Pays each achievement's one-time reward on unlock. Guarded against re-entry because
   // applying coins/gems triggers notify() -> checkAchievements() again.

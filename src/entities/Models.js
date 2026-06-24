@@ -169,7 +169,7 @@ export function makeAccessory(id) {
       for (const s of [-1, 1]) {
         const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.8, 8), mat(0xbdc3c7, false, { metalness: 0.5 })); tank.position.set(s * 0.22, 1.05, -0.42); g.add(tank);
         const nozzle = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.2, 8), mat(0x333333)); nozzle.position.set(s * 0.22, 0.58, -0.42); nozzle.rotation.x = Math.PI; g.add(nozzle);
-        const flame = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.3, 8), mat(0xff7043, false, { emissive: 0x662200 })); flame.position.set(s * 0.22, 0.4, -0.42); flame.rotation.x = Math.PI; g.add(flame);
+        const flame = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.3, 8), mat(0xff7043, false, { emissive: 0x662200 })); flame.position.set(s * 0.22, 0.4, -0.42); flame.rotation.x = Math.PI; flame.userData.flame = true; g.add(flame);
       }
       break;
     }

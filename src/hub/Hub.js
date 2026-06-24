@@ -6,8 +6,11 @@ import { makeBank, makeGarage, makeTower, makeZoneMarker, makeNPC, makeSign, mak
 import { makeDock, makeBoat, makeSeaVehicle } from '../entities/Models.js';
 import { VEHICLES } from '../config.js';
 
-const CENTER = { x: 0, z: -12 };
-const ISLAND_R = 54;
+// Coastline, not an island: solid LAND covers the back/sides (where every building sits) and
+// OPEN SEA stretches to the horizon on the front (+Z) side, past the dock. These bounds are the
+// walkable rectangle; maxZ is the shoreline/waterline.
+const LAND = { minX: -64, maxX: 64, minZ: -64, maxZ: 24 };
+const WATERLINE = LAND.maxZ;
 
 export class Hub {
   constructor(scene, economy, save) {
@@ -27,27 +30,34 @@ export class Hub {
 
   _build() {
     this.npcs = [];
-    // Island platform (grass) + sandy rim
-    const grass = new THREE.Mesh(new THREE.CylinderGeometry(ISLAND_R, ISLAND_R + 2, 2, 40),
-      new THREE.MeshStandardMaterial({ color: 0x6ab04c, flatShading: true, roughness: 1 }));
-    grass.receiveShadow = true; this.add(grass, CENTER.x, -1, CENTER.z);
-    const rim = new THREE.Mesh(new THREE.CylinderGeometry(ISLAND_R + 4, ISLAND_R + 7, 1.6, 40),
+    // ---- LAND: one big grassy coast behind the shoreline (all buildings sit on it) ----
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0x6ab04c, flatShading: true, roughness: 1 });
+    const landDepth = (WATERLINE + 100);                 // from z=-100 (deep back) to the waterline
+    const land = new THREE.Mesh(new THREE.BoxGeometry(180, 3, landDepth), grassMat);
+    land.receiveShadow = true; this.add(land, 0, -1.5, WATERLINE - landDepth / 2);
+    // sandy BEACH band right at the waterline so the grass meets the sea on a shore, not a cliff
+    const beach = new THREE.Mesh(new THREE.BoxGeometry(180, 3.04, 18),
       new THREE.MeshStandardMaterial({ color: 0xffe3a0, flatShading: true }));
-    rim.receiveShadow = true; this.add(rim, CENTER.x, -1.3, CENTER.z);
+    beach.receiveShadow = true; this.add(beach, 0, -1.49, WATERLINE - 7);
 
-    // central paths (cross) for readability
-    for (const rot of [0, Math.PI / 2]) {
-      const path = new THREE.Mesh(new THREE.BoxGeometry(6, 0.1, ISLAND_R * 1.6),
-        new THREE.MeshStandardMaterial({ color: 0xcdb58a, flatShading: true }));
-      path.rotation.y = rot; this.add(path, CENTER.x, 0.06, CENTER.z);
-    }
-    // Branch walkways so every district connects to the plaza by a PATH (not random grass).
+    // ---- OPEN SEA: a wide surface from the shoreline out to the horizon (fog fades it into the
+    // sky), so standing on the beach you look out over real open water — not a small round pool ----
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(700, 640),
+      new THREE.MeshStandardMaterial({ color: 0x2aa7d8, transparent: true, opacity: 0.82, flatShading: true, metalness: 0.3, roughness: 0.3, emissive: 0x0a3d52, emissiveIntensity: 0.3 }));
+    sea.rotation.x = -Math.PI / 2; sea.receiveShadow = false; this.add(sea, 0, -0.15, WATERLINE + 310);
+    const deep = new THREE.Mesh(new THREE.PlaneGeometry(700, 640),
+      new THREE.MeshStandardMaterial({ color: 0x0c5778, transparent: true, opacity: 0.6 }));
+    deep.rotation.x = -Math.PI / 2; this.add(deep, 0, -1.0, WATERLINE + 310);
+
+    // ---- PATHS: one central spine (back districts <-> dock) + a clean spur to each side area.
+    // No dead-end branches: every path runs from the plaza straight to a building front.
     const pathMat = new THREE.MeshStandardMaterial({ color: 0xcdb58a, flatShading: true });
     const addPath = (x, z, w, l) => this.add(new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, l), pathMat), x, 0.06, z);
-    addPath(20, -4, 30, 5);    // plaza -> shop district (along x)
-    addPath(34, -4, 5, 38);    // shop-front street linking SKINS/GEAR/UPGRADES (along z)
-    addPath(-20, -12, 32, 5);  // plaza -> financial plaza (along x)
-    addPath(-31, -6, 5, 28);   // bank/wheel front street (along z)
+    addPath(0, -11, 6, 72);    // central spine: garage/tower (back) <-> plaza <-> dock (front)
+    addPath(-19, -6, 42, 6);   // plaza -> financial plaza (left)
+    addPath(-36, -6, 5, 26);   // bank + wheel front street
+    addPath(19, -4, 42, 6);    // plaza -> shop district (right)
+    addPath(40, -4, 5, 38);    // SKINS/GEAR/UPGRADES front street
 
     // Structures + their trigger zones
     const tower = makeTower(this.save.data.highestLevel || 1); this.add(tower, 0, 0, -32);
@@ -109,24 +119,16 @@ export class Hub {
     // sea (+Z), so it reads unmistakably as "board here to dive".
     // Long pier reaching PAST the beach to the sea; a sea disc at the head so the boat floats
     // in water (not parked on the dock planks), with the boat lowered to sit IN the water.
-    const dock = makeDock(30); this.add(dock, 0, 0, 38);
-    const sea = new THREE.Mesh(new THREE.CircleGeometry(26, 40),
-      new THREE.MeshStandardMaterial({ color: 0x2e8bc0, flatShading: true, roughness: 0.4, transparent: true, opacity: 0.95 }));
-    sea.rotation.x = -Math.PI / 2; this.add(sea, 0, 0.05, 62);
-    const boat = makeBoat(); this.add(boat, 0, -0.18, 55); boat.rotation.y = -Math.PI / 2; // floats at the pier tip
-    this.add(makeSign('DOCK — START DIVE', 7, '#10243a', '#06d6a0'), 0, 2.4, 22);
-    this._zone('dock', 'levels', 0, 26, 5, 0x06d6a0);
+    const dock = makeDock(30); this.add(dock, 0, 0, WATERLINE + 14);   // pier: beach -> open water
+    // Boat moored beside the pier near the SHORE end (where the dive ring is), floating in the
+    // shallows with its hull half-submerged and bow to sea — so the player plainly sees "board here".
+    const boat = makeBoat(); boat.scale.setScalar(1.35); this.add(boat, 5, -0.3, WATERLINE + 6); boat.rotation.y = 0;
+    this.add(makeSign('DOCK — START DIVE', 7, '#10243a', '#06d6a0'), 0, 2.4, WATERLINE - 2);
+    this._zone('dock', 'levels', 0, WATERLINE + 2, 5, 0x06d6a0);
 
-    // simple fence ring so the island edge reads as a boundary
-    for (let i = 0; i < 28; i++) {
-      const a = (i / 28) * Math.PI * 2;
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 1.4, 5),
-        new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true }));
-      this.add(post, CENTER.x + Math.cos(a) * (ISLAND_R - 1), 0.5, CENTER.z + Math.sin(a) * (ISLAND_R - 1));
-    }
-
-    // a few palms for life — kept clear of the shop fronts/paths so none block a trigger zone.
-    for (const [x, z] of [[-23, 22], [23, 22], [-47, -34], [46, -38]]) {
+    // Palms for life — placed only at the open LAND corners, well clear of every building front,
+    // path and trigger zone, so none blocks the way to a shop / the garage / the dock.
+    for (const [x, z] of [[-58, -50], [58, -50], [-60, 8], [60, 8]]) {
       const t = new THREE.Group();
       const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.4, 4, 6), new THREE.MeshStandardMaterial({ color: 0x8a5a2b, flatShading: true }));
       trunk.position.y = 2; t.add(trunk);
@@ -197,10 +199,10 @@ export class Hub {
   // Returns the panel id of a freshly-entered zone, or null. Also resolves collisions.
   update(dt, player) {
     this._t += dt;
-    // keep player on the island
-    const dx = player.pos.x - CENTER.x, dz = player.pos.z - CENTER.z;
-    const d = Math.hypot(dx, dz);
-    if (d > ISLAND_R - 2) { const k = (ISLAND_R - 2) / d; player.pos.x = CENTER.x + dx * k; player.pos.z = CENTER.z + dz * k; }
+    // keep the player on the LAND (rectangular coast). The open sea (z > waterline) is off-limits;
+    // the dock trigger fires the dive before you reach the water's edge, so no swimming in the hub.
+    player.pos.x = Math.max(LAND.minX, Math.min(LAND.maxX, player.pos.x));
+    player.pos.z = Math.max(LAND.minZ, Math.min(LAND.maxZ, player.pos.z));
     // block buildings
     for (const s of this.solids) {
       const ox = player.pos.x - s.x, oz = player.pos.z - s.z, od = Math.hypot(ox, oz), min = s.r + this.playerRadius;
