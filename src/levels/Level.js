@@ -126,42 +126,58 @@ export class Level {
       this.coins.push(m);
     }
 
-    // Level 6 final prize: the LUXURY CAR on a CENTRED, raised SAFE PLATFORM at the far end,
-    // with a bright beacon so the player clearly sees where to run.
+    // Level 6 final prize: the player swims AWAY from the tsunami toward a DRY FAR SHORE — a real
+    // sandy beach rising out of the sea with a CITY skyline behind it (the escape destination).
+    // The LUXURY CAR waits ON THE SAND (logical), not floating in the sea.
     if (this.def.id === 6) {
       this.submarine.visible = false;
       const goalZ = WORLD.size - 14;
-      // bigger sandy SAFE PAD lifting the car above the water so it reads from across the field
-      const pad = new THREE.Mesh(new THREE.CylinderGeometry(10, 11, 1.6, 20),
+      const shoreY = 4.6;                          // sand surface sits ABOVE the water (y=2.5)
+      // big dry beach landmass rising out of the water at the escape end — LONG (extends far +Z)
+      // so the getaway car has a road of sand to drive on, all the way INTO the city.
+      const shore = new THREE.Mesh(new THREE.BoxGeometry(WORLD.size * 2.4, 9, 280),
         new THREE.MeshStandardMaterial({ color: 0xf2e2b8, flatShading: true, roughness: 1 }));
-      pad.position.set(0, 0.2, goalZ); pad.receiveShadow = true; this.scene.add(pad); this.barriers.push(pad);
-      // The prize car, scaled UP into a clear landmark and turned to FACE the fleeing player
-      // (front = +Z, so rotation.y = PI presents its nose/headlights to someone swimming in from -Z).
+      shore.position.set(0, shoreY - 4.5, goalZ + 134); shore.receiveShadow = true; this.scene.add(shore); this.barriers.push(shore);
+      const wet = new THREE.Mesh(new THREE.BoxGeometry(WORLD.size * 2.4, 9.04, 10),
+        new THREE.MeshStandardMaterial({ color: 0xe6c684, flatShading: true }));
+      wet.position.set(0, shoreY - 4.52, goalZ - 2); this.scene.add(wet); this.barriers.push(wet);
+      // a dark "road" strip the car drives down, leading from the shore into the city
+      const road = new THREE.Mesh(new THREE.BoxGeometry(9, 9.05, 150), new THREE.MeshStandardMaterial({ color: 0x3a3f47, flatShading: true }));
+      road.position.set(0, shoreY - 4.5, goalZ + 80); this.scene.add(road); this.barriers.push(road);
+      // CITY skyline silhouettes inland (+Z) — the place the getaway car races to
+      this._city = new THREE.Group();
+      for (let i = 0; i < 18; i++) {
+        const w = 5 + (i * 37 % 6), hh = 16 + (i * 53 % 30), side = i % 2 ? 1 : -1;
+        const bldg = new THREE.Mesh(new THREE.BoxGeometry(w, hh, w),
+          new THREE.MeshStandardMaterial({ color: 0x394a63, flatShading: true, emissive: 0x0a1422 }));
+        bldg.position.set(side * (10 + (i * 13 % 46)), shoreY + hh / 2, goalZ + 95 + (i * 29 % 56)); this._city.add(bldg);
+        const lit = new THREE.Mesh(new THREE.BoxGeometry(w * 0.92, hh * 0.92, w * 0.92),
+          new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0.12 }));
+        lit.position.copy(bldg.position); this._city.add(lit);
+      }
+      this.scene.add(this._city);
+      // The getaway car parked on the sand at the shore, facing the city (+Z) — the escape route.
+      // The player arrives from the sea (-Z) behind it; the ending cutscene drives it into the city.
       this.car = makeLuxuryCar(0xffd166);
       this.car.scale.setScalar(2.2);
-      this.car.rotation.y = Math.PI;
-      this.car.position.set(0, 1.1, goalZ);
-      this.submarine.position.set(0, 0, goalZ);   // keep goal math centred on the pad
-      // BOLD beacon stack so the goal is unmistakable from anywhere on the field:
-      //  - a fat, bright, tall glow COLUMN
-      //  - a big pulsing ground ring
-      //  - a floating "ESCAPE CAR" sign high above, plus a down-arrow pointing at it
+      this.car.rotation.y = 0;                     // front = +Z (toward the city escape route)
+      this.car.position.set(0, shoreY + 0.1, goalZ + 6);
+      this.submarine.position.set(0, 0, goalZ);   // keep the goal-distance math centred on the shore
+      // BOLD beacon stack so the shore/car is unmistakable from across the water
       const beamCol = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 2.6, 46, 16, 1, true),
         new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false }));
-      beamCol.position.set(0, 23, goalZ); this.scene.add(beamCol); this.barriers.push(beamCol);
+      beamCol.position.set(0, shoreY + 23, goalZ + 2); this.scene.add(beamCol); this.barriers.push(beamCol);
       const beacon = new THREE.Mesh(new THREE.TorusGeometry(9, 0.5, 8, 28),
         new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xffaa00, emissiveIntensity: 1, flatShading: true }));
-      beacon.rotation.x = -Math.PI / 2; beacon.position.set(0, 1.0, goalZ); this.scene.add(beacon); this.barriers.push(beacon);
+      beacon.rotation.x = -Math.PI / 2; beacon.position.set(0, shoreY + 0.1, goalZ + 2); this.scene.add(beacon); this.barriers.push(beacon);
       this._goalBeacon = beacon;
-      const sign = makeSign('🚗 ESCAPE CAR', 8, '#1a1205', '#ffd166'); sign.position.set(0, 14, goalZ);
-      // the player swims in from -Z, so turn the sign 180° to face them; viewed by a +Z-looking
-      // camera the text then reads correctly (DoubleSide so the panel renders from that side).
-      sign.rotation.y = Math.PI; sign.material.side = THREE.DoubleSide;
+      const sign = makeSign('🚗 ESCAPE CAR', 8, '#1a1205', '#ffd166'); sign.position.set(0, shoreY + 14, goalZ);
+      sign.rotation.y = Math.PI; sign.material.side = THREE.DoubleSide;   // face the player swimming in from -Z
       this.scene.add(sign); this.barriers.push(sign);
       this._goalSign = sign;
       const arrow = new THREE.Mesh(new THREE.ConeGeometry(1.4, 3, 5),
         new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xff8800, emissiveIntensity: 1, flatShading: true }));
-      arrow.rotation.x = Math.PI; arrow.position.set(0, 9.5, goalZ); this.scene.add(arrow); this.barriers.push(arrow);
+      arrow.rotation.x = Math.PI; arrow.position.set(0, shoreY + 9.5, goalZ); this.scene.add(arrow); this.barriers.push(arrow);
       this._goalArrow = arrow;
       this.scene.add(this.car);
     }
@@ -308,8 +324,8 @@ export class Level {
 
     if (!player.alive) { this.audio.lose(); return 'lose'; }
 
-    // tsunami catches the player
-    if (this.tsunamiActive && this.effects.tsunami && player.pos.z > this.effects.tsunami.position.z - 4) {
+    // tsunami (surging from BEHIND, -Z) catches the player if its crest reaches them
+    if (this.tsunamiActive && this.effects.tsunami && player.pos.z < this.effects.tsunami.position.z + 6) {
       player.alive = false; this.audio.lose(); return 'lose';
     }
 
@@ -325,7 +341,9 @@ export class Level {
     }
 
     if (this.def.tsunami) {
-      if (goalDist < 3.5) { this.audio.win(); return 'win'; }
+      // trigger at the WATER'S EDGE (car sits a little up the dry beach) so the diver reaches the
+      // shore from the sea and the cutscene takes over before they'd clip into the sand.
+      if (goalDist < 9) { this.audio.win(); return 'win'; }
       return null;
     }
 

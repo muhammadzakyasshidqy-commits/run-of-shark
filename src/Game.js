@@ -133,7 +133,10 @@ export class Game {
   // so the edge is visible BEFORE the player hits the invisible clamp.
   _buildBoundary() {
     const S = WORLD.size, step = 26;
-    const place = (x, z) => this.scene.add(this._buoy(x, z));
+    // Buoys mark the LEVEL playfield edge. They live in their own group so the HUB (a coastline
+    // bounded by hills, not buoys) can hide them — otherwise they floated on the land sides.
+    this.boundaryBuoys = new THREE.Group(); this.scene.add(this.boundaryBuoys);
+    const place = (x, z) => this.boundaryBuoys.add(this._buoy(x, z));
     for (let z = WORLD.beachZ + 10; z <= S; z += step) { place(-S, z); place(S, z); } // side edges
     for (let x = -S; x <= S; x += step) place(x, S);                                   // far edge
   }
@@ -218,6 +221,7 @@ export class Game {
   _setWater(visible) {
     if (this.water) this.water.visible = visible;
     if (this.deepWater) this.deepWater.visible = visible;
+    if (this.boundaryBuoys) this.boundaryBuoys.visible = visible;   // buoys are a LEVEL edge, not a hub one
     if (this.effects?.bubbles) this.effects.bubbles.visible = visible;
   }
 
@@ -390,42 +394,53 @@ export class Game {
     };
   }
 
-  // --- Level 6 finale: player reaches the LUXURY CAR -> 3D escape from the tsunami.
-  // Car (with player aboard) floors it toward the beach (-Z); the tsunami wall surges
-  // after it; chase camera follows. On escape -> onWin() -> UI ending text + credits.
+  // --- Level 6 finale: a 3D ESCAPE CUTSCENE. Beat 1: the diver scrambles out of the surf and
+  // climbs into the luxury car on the shore while the tsunami towers behind. Beat 2: the car floors
+  // it INTO THE CITY (+Z), outrunning the wave; cinematic chase cam. Then -> onWin -> ending+credits.
   _escapeCutscene() {
     this.controlLocked = true;
     const car = this.level.car;
-    const tsunami = this.effects.tsunami;
-    // "get in the car": hide the diver, sit the car where the player reached it
-    this.player.mesh.visible = false;
-    car.position.x = this.player.pos.x; car.position.z = this.player.pos.z; car.position.y = 0.2;
-    car.rotation.y = Math.PI; // face -Z (the escape direction)
-    if (tsunami) { tsunami.position.z = car.position.z + 26; } // wave looming just behind
+    const shoreY = car.position.y;                 // sand surface
     this.audio.tsunami();
-    this.onCine({ title: '🌊 DRIVE!', sub: 'Outrun the tsunami!' });
-    const dur = 4.2; let t = 0; let shook = 0;
+    this.effects.tsunamiVel = 11;                  // wave surges harder during the chase
+    // diver scrambles onto the sand for the "get in" beat
+    this.player.mesh.visible = true;
+    this.player.pos.set(car.position.x - 3, shoreY, car.position.z - 4);
+    this.onCine({ title: '🏖️ GET IN THE CAR!', sub: 'Escape into the city!' });
+    this._cine = { phase: 0, t: 0, shk: 0 };
     this.cinematic = (dt) => {
-      t += dt;
-      const carSpeed = 24 + t * 6;              // accelerate away
-      car.position.z -= carSpeed * dt;          // flee toward the beach (-Z)
-      car.position.x += Math.sin(t * 4) * dt * 1.5; // slight swerve for drama
-      if (tsunami) {                            // wave chases, a touch slower so the car wins
-        tsunami.position.z -= (carSpeed - 3) * dt;
-        tsunami.material.color.offsetHSL(0, 0, Math.sin(t * 12) * 0.01);
+      const c = this._cine; c.t += dt;
+      if (c.phase === 0) {
+        // BEAT 1 (~1.4s): run to the driver's door, then climb in (vanish). Side camera frames the
+        // car AND the towering tsunami wall surging across the water behind.
+        const k = Math.min(1, c.t / 1.4);
+        const door = new THREE.Vector3(car.position.x - 1.4, shoreY, car.position.z - 1.2);
+        this.player.pos.x += (door.x - this.player.pos.x) * Math.min(1, dt * 5);
+        this.player.pos.z += (door.z - this.player.pos.z) * Math.min(1, dt * 5);
+        this.player.pos.y = shoreY;
+        this.player.mesh.rotation.y = Math.atan2(car.position.x - this.player.pos.x, car.position.z - this.player.pos.z) || 0;
+        if (this.player.mesh.userData.setAnim) { this.player.mesh.userData.setAnim('walk'); this.player.mesh.userData.mixer.update(dt); }
+        const cam = new THREE.Vector3(car.position.x + 16, shoreY + 7, car.position.z - 12);
+        this.camera.position.lerp(cam, Math.min(1, dt * 3));
+        this.camera.lookAt(car.position.x - 6, shoreY + 3, car.position.z - 20); // toward car + wave behind
+        if (k >= 1) { this.player.mesh.visible = false; this.audio.pickup(); c.phase = 1; c.t = 0; }
+        return false;
       }
-      this.effects.update(dt * 0.0, this.clock.elapsedTime);
-      if (t > shook * 0.25) { shook++; this.shake = Math.max(this.shake, 0.35); } // rumble
-      // chase camera behind + above the car, looking ahead and back at the wave
-      const behind = new THREE.Vector3(car.position.x - 2, 7, car.position.z + 15);
-      this.camera.position.lerp(behind, Math.min(1, dt * 3));
+      // BEAT 2 (~4s): floor it into the city (+Z), wave chasing; rumbling chase cam.
+      const t = c.t;
+      const carSpeed = 16 + t * 8;                          // ends among the city buildings
+      car.position.z += carSpeed * dt;
+      car.position.x += Math.sin(t * 2.5) * dt * 1.4;     // weave for drama
+      if (t > c.shk) { c.shk = t + 0.22; this.shake = Math.max(this.shake, 0.3); }
+      const behind = new THREE.Vector3(car.position.x - 3.5, shoreY + 6, car.position.z - 17);
+      this.camera.position.lerp(behind, Math.min(1, dt * 2.6));
       if (this.shake > 0) { this.camera.position.x += (Math.random() - 0.5) * this.shake; this.camera.position.y += (Math.random() - 0.5) * this.shake; this.shake = Math.max(0, this.shake - dt * 1.5); }
-      this.camera.lookAt(car.position.x, 1.2, car.position.z - 6);
-      if (t >= dur) {
+      this.camera.lookAt(car.position.x, shoreY + 1.6, car.position.z + 10); // look ahead toward the city
+      if (t >= 4.0) {
         this.onCine(null);
         this.cinematic = null;
         this.running = false;
-        this.onWin(this.levelIndex); // -> UI._win -> _ending() text + credits
+        this.onWin(this.levelIndex); // -> UI._win -> _ending() text + credits (closer after the 3D scene)
         return true;
       }
       return false;

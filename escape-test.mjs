@@ -24,14 +24,14 @@ const out = await p.evaluate(async () => {
   }
   r.cutsceneStarted = triggered && !!g.cinematic;
   r.controlLocked = g.controlLocked;
-  r.playerHidden = g.player.mesh.visible === false;
   const carZ0 = car.position.z;
   const tsu = g.effects.tsunami; const tsuZ0 = tsu ? tsu.position.z : null;
-  // advance the cutscene ~1s
-  for (let f = 0; f < 60; f++) g.cinematic && g.cinematic(dt);
-  r.carMoved = +(carZ0 - car.position.z).toFixed(2);      // should be positive (fled -Z)
-  r.tsunamiMoved = tsu ? +(tsuZ0 - tsu.position.z).toFixed(2) : null; // chasing -Z
-  r.tsunamiBehindCar = tsu ? tsu.position.z > car.position.z : null;  // wave stays behind
+  // advance well into the DRIVE phase (~3s; beat 1 "get in" is ~1.4s, then the car floors it)
+  for (let f = 0; f < 180; f++) g.cinematic && g.cinematic(dt);
+  r.carDroveToCity = +(car.position.z - carZ0).toFixed(2);            // positive: fled +Z into the city
+  r.tsunamiChased = tsu ? +(tsu.position.z - tsuZ0).toFixed(2) : null; // positive: wave surged +Z too
+  r.tsunamiBehindCar = tsu ? tsu.position.z < car.position.z : null;   // wave stays BEHIND (lower z)
+  r.playerHiddenDuringDrive = g.player.mesh.visible === false;         // diver is "in the car"
   // run cutscene to completion
   let frames = 0; while (g.cinematic && frames < 600) { g.cinematic(dt); frames++; }
   r.endedToWin = winCalled;

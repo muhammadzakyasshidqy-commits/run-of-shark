@@ -49,19 +49,23 @@ export class Hub {
       new THREE.MeshStandardMaterial({ color: 0x0c5778, transparent: true, opacity: 0.6 }));
     deep.rotation.x = -Math.PI / 2; this.add(deep, 0, -1.0, WATERLINE + 310);
 
-    // ---- PATHS: one central spine (back districts <-> dock) + a clean spur to each side area.
-    // No dead-end branches: every path runs from the plaza straight to a building front.
+    // ---- PATHS: a central spine (dock <-> plaza <-> Tower) plus one clean spur to each district.
+    // Front streets run IN FRONT of the buildings (on the player side), never THROUGH them, and the
+    // spine STOPS in front of the Tower instead of passing through it. No dead-end branches.
     const pathMat = new THREE.MeshStandardMaterial({ color: 0xcdb58a, flatShading: true });
     const addPath = (x, z, w, l) => this.add(new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, l), pathMat), x, 0.06, z);
-    addPath(0, -11, 6, 72);    // central spine: garage/tower (back) <-> plaza <-> dock (front)
-    addPath(-19, -6, 42, 6);   // plaza -> financial plaza (left)
-    addPath(-36, -6, 5, 26);   // bank + wheel front street
-    addPath(19, -4, 42, 6);    // plaza -> shop district (right)
-    addPath(40, -4, 5, 38);    // SKINS/GEAR/UPGRADES front street
+    addPath(0, -2, 6, 52);     // central spine: dock (z=24) <-> plaza <-> Tower front (z=-28)
+    addPath(-14, -6, 36, 6);   // plaza -> financial plaza (left), ends in front of the Bank
+    addPath(-30, -6, 5, 30);   // Bank + Wheel FRONT street (player side, x=-30; buildings at x=-36)
+    addPath(16, -4, 36, 6);    // plaza -> shop district (right), ends in front of the shops
+    addPath(33, -4, 5, 38);    // SHOP FRONT street (player side, x=33; kiosks at x=40)
+    addPath(15, -24, 32, 6);   // plaza/spine -> garage spur (turns back-right)
+    addPath(30, -36, 6, 26);   // garage approach (leads to the showroom's open front)
 
-    // Structures + their trigger zones
-    const tower = makeTower(this.save.data.highestLevel || 1); this.add(tower, 0, 0, -32);
-    this._zone('tower', 'levels', 0, -22, 6, 0x2ec4ff); this._solid(0, -32, 5);
+    // Structures + their trigger zones. TOWER is the central back landmark; the spine leads up to
+    // its trigger ring (in FRONT of it) rather than running through it.
+    const tower = makeTower(this.save.data.highestLevel || 1); this.add(tower, 0, 0, -34);
+    this._zone('tower', 'levels', 0, -26, 6, 0x2ec4ff); this._solid(0, -34, 5);
 
     // FINANCIAL PLAZA (left) — Bank + ATM + Lucky Wheel grouped tidily, all facing the central
     // plaza (+X) so they read as one area you approach from the paths. Buildings face +X
@@ -92,18 +96,16 @@ export class Hub {
     const upgShop = makeKiosk('UPGRADES', 0x06d6a0, 0x2ecc71); upgShop.rotation.y = FACE_LEFT; this.add(upgShop, 40, 0, 12); this._solid(40, 12, 5.5);
     this._zone('upgradeshop', 'upgrades', 31, 12, 5, 0x06d6a0); this._npc(36.5, 12, 0x16a085, 0xffd166, FACE_LEFT);
 
-    // GARAGE SHOWROOM (BACK — behind the Tower, filling the previously-empty rear of the island).
-    // Each vehicle is a PHYSICAL car you walk up to; standing by one opens a buy/own panel for
-    // THAT car (zone panel 'veh:<id>'). One tidy row centred on x=0, every car facing the player
-    // (+Z); the canopy is scaled to span the whole row so no car pokes out from under it.
-    const gz = -44;                                            // showroom row depth (clear behind tower@z=-32)
-    const canopy = makeGarage(this.save.data.ownedVehicles || []);
-    this.add(canopy, 0, 0, gz - 4); canopy.scale.setScalar(1.8); // centred behind the row, covers its full width
-    this.add(makeSign('GARAGE', 6, '#2c2c2c', '#ffffff'), 0, 6, gz + 3);
-    this._npc(15, gz + 2, 0x34495e, 0xe74c3c, 0);              // mechanic beside the row, facing the player (+Z)
-    this.vehicleCars = {};
+    // GARAGE SHOWROOM — its OWN building in the back-RIGHT (clearly off the Tower's centre axis so
+    // the two never overlap from the approach). A proper roofed showroom with spotlit bays; the
+    // sea vehicles sit on the floor inside, each a PHYSICAL car whose zone opens its buy/own panel.
     const SPACING = 5.8;                                       // > 2*zoneR(2.6) so adjacent zones keep a clear gap
-    const gx = -((VEHICLES.length - 1) * SPACING) / 2;         // left end so the row is centred on x=0
+    const gCenterX = 30, gz = -48;                            // showroom centre (back-right)
+    const showroom = makeGarage(VEHICLES.length, SPACING);    // shell sized to the vehicle row
+    showroom.rotation.y = 0; this.add(showroom, gCenterX, 0, gz); // open front faces +Z (player approaches from front)
+    this._npc(gCenterX + 13, gz + 4, 0x34495e, 0xe74c3c, 0);  // mechanic beside the showroom, facing the player
+    this.vehicleCars = {};
+    const gx = gCenterX - ((VEHICLES.length - 1) * SPACING) / 2; // left bay so the row centres in the showroom
     VEHICLES.forEach((v, i) => {
       const owned = (this.save.data.ownedVehicles || []).includes(v.id);
       const car = makeSeaVehicle(v.id, v.color);               // distinct primitive sea craft per tier
@@ -111,7 +113,7 @@ export class Hub {
       const cx = gx + i * SPACING, cz = gz;
       this.add(car, cx, 0.7, cz); car.rotation.y = -Math.PI / 2; // face +Z (toward the approaching player)
       this.vehicleCars[v.id] = { car, color: v.color };
-      this._zone('veh:' + v.id, 'veh:' + v.id, cx, cz + 3, 2.6, owned ? 0x2ecc71 : 0xffd166); // zone on player side
+      this._zone('veh:' + v.id, 'veh:' + v.id, cx, cz + 4, 2.6, owned ? 0x2ecc71 : 0xffd166); // zone at the open front
     });
 
     // Dock + wooden boat at the front — the clearly-labelled "start dive" point. The boat sits
@@ -137,8 +139,25 @@ export class Hub {
       this.add(t, x, 0, z);
     }
 
-    // (Floating chevron arrows removed — they were confusing. Each area is labelled by its
-    // own sign + coloured trigger ring instead.)
+    // ---- HILLS / MOUNTAINS ringing the land on the NON-sea sides (back + left + right). They
+    // frame the coast as a real place and act as a NATURAL boundary (you can see you can't go that
+    // way) — replacing the old sea buoys that used to float on the land edge. Low-poly cones, a few
+    // with snowy/grey caps for distant peaks. All sit OUTSIDE the walkable rectangle.
+    const hill = (x, z, r, ht, col, cap) => {
+      const grp = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.ConeGeometry(r, ht, 7), new THREE.MeshStandardMaterial({ color: col, flatShading: true, roughness: 1 }));
+      body.position.y = ht / 2; grp.add(body);
+      if (cap) { const peak = new THREE.Mesh(new THREE.ConeGeometry(r * 0.42, ht * 0.34, 7), new THREE.MeshStandardMaterial({ color: 0xeaf2f6, flatShading: true })); peak.position.y = ht * 0.86; grp.add(peak); }
+      grp.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      this.add(grp, x, -1, z);
+    };
+    const greens = [0x5a9e3f, 0x4f8f39, 0x6ab04c];
+    // back ridge (behind the land, -Z)
+    for (let i = 0; i < 9; i++) { const x = -88 + i * 22 + (i % 2 ? 6 : 0); const big = i % 3 === 0; hill(x, -82 - (i % 2) * 10, big ? 20 : 14, big ? 30 : 20, big ? 0x6b7b86 : greens[i % 3], big); }
+    // left + right ridges (sides) — shorter green hills marching toward the shore
+    for (let i = 0; i < 6; i++) { const z = -78 + i * 16; hill(-82 - (i % 2) * 6, z, 12, 17, greens[i % 3], false); hill(82 + (i % 2) * 6, z, 12, 17, greens[(i + 1) % 3], false); }
+
+    // (Floating chevron arrows removed — each area is labelled by its own sign + coloured ring.)
 
     // a couple of ambient wanderers in the plaza (shopkeepers were added per-zone via _npc)
     this._npc(-8, 18, 0x4a90d9, 0xffffff);

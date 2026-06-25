@@ -80,13 +80,43 @@ export function makeShop() {
 }
 
 // GARAGE — open structure; owned vehicles shown in colour, locked ones greyed out.
-export function makeGarage(ownedVehicleIds = []) {
+// GARAGE SHOWROOM — a proper open-front showroom: tiled floor, glass back/side walls, a pitched
+// roof with a coloured fascia + big "GARAGE" header, corner pillars, and a SPOTLIGHT cone over
+// each of `bays` vehicle spots. Built `bays` wide so the Hub's vehicle row sits tidily inside.
+// Open front faces +Z (toward the approaching player); the Hub positions the cars on the floor.
+export function makeGarage(bays = 5, bayGap = 5.8) {
   const g = new THREE.Group();
-  const slab = new THREE.Mesh(new THREE.BoxGeometry(14, 0.3, 7), mat(0x7f8c8d)); slab.position.y = 0.15; g.add(slab);
-  for (const x of [-6.5, 6.5]) { for (const z of [-3, 3]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 4, 6), mat(0xbdc3c7)); post.position.set(x, 2, z); g.add(post); } }
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(15, 0.4, 8), mat(0xe74c3c)); roof.position.set(0, 4.1, 0); g.add(roof);
-  // (Silhouette cars + internal sign removed — the real GLB showroom cars now sit under this
-  // open canopy, and the Hub adds the GARAGE sign, so an empty roofed structure reads cleaner.)
+  const W = bays * bayGap + 4, D = 12, H = 6;     // footprint
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(W, 0.3, D), mat(0x4a525a));
+  floor.position.set(0, 0.15, 0); g.add(floor);
+  // showroom tile stripes for a polished look
+  for (let i = 0; i < bays; i++) {
+    const tile = new THREE.Mesh(new THREE.BoxGeometry(bayGap - 0.6, 0.32, D - 1.4), mat(i % 2 ? 0x5c6670 : 0x515a63));
+    tile.position.set(-((bays - 1) * bayGap) / 2 + i * bayGap, 0.16, 0); g.add(tile);
+  }
+  // back + side glass walls (tinted, semi-transparent)
+  const glass = () => new THREE.MeshStandardMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.22, metalness: 0.3, roughness: 0.1, flatShading: true });
+  const back = new THREE.Mesh(new THREE.BoxGeometry(W, H, 0.3), glass()); back.position.set(0, H / 2, -D / 2); g.add(back);
+  for (const sx of [-1, 1]) { const side = new THREE.Mesh(new THREE.BoxGeometry(0.3, H, D), glass()); side.position.set(sx * W / 2, H / 2, 0); g.add(side); }
+  // corner pillars (front + back)
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const pil = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, H, 8), mat(0xced6dd, false, { metalness: 0.4 }));
+    pil.position.set(sx * (W / 2 - 0.4), H / 2, sz * (D / 2 - 0.4)); g.add(pil);
+  }
+  // flat roof slab + a bold coloured FASCIA band across the open front
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(W + 1.2, 0.5, D + 1.2), mat(0x2c3540)); roof.position.set(0, H + 0.25, 0); g.add(roof);
+  const fascia = new THREE.Mesh(new THREE.BoxGeometry(W + 1.4, 1.3, 0.5), mat(0xe74c3c, false, { metalness: 0.2 })); fascia.position.set(0, H + 0.4, D / 2 + 0.6); g.add(fascia);
+  const fasciaTrim = new THREE.Mesh(new THREE.BoxGeometry(W + 1.4, 0.18, 0.55), mat(0xffd166, false, { emissive: 0x4a3500 })); fasciaTrim.position.set(0, H - 0.25, D / 2 + 0.62); g.add(fasciaTrim);
+  const header = makeSign('🚗 GARAGE', Math.min(W, 12), '#10243a', '#ffd166'); header.position.set(0, H + 0.4, D / 2 + 0.88); g.add(header);
+  // SPOTLIGHT cones glowing down onto each bay (read as showroom lighting)
+  for (let i = 0; i < bays; i++) {
+    const x = -((bays - 1) * bayGap) / 2 + i * bayGap;
+    const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.3, 8), mat(0x222222)); lamp.position.set(x, H - 0.2, 1.5); g.add(lamp);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(1.5, 4.4, 12, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xfff3c0, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
+    cone.position.set(x, H - 2.5, 1.5); g.add(cone);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), mat(0xfff3c0, false, { emissive: 0xffe066, emissiveIntensity: 1 })); bulb.position.set(x, H - 0.4, 1.5); g.add(bulb);
+  }
   g.traverse((o) => { if (o.isMesh && !o.userData.isSign) o.castShadow = true; });
   return g;
 }

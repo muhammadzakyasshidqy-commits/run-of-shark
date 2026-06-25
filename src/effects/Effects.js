@@ -55,13 +55,21 @@ export class Effects {
   }
 
   spawnTsunami() {
-    const geo = new THREE.BoxGeometry(WORLD.size * 2.4, 40, 8);
-    const m = new THREE.MeshStandardMaterial({ color: 0x1e6fa0, transparent: true, opacity: 0.85, flatShading: true });
-    const wall = new THREE.Mesh(geo, m);
-    wall.position.set(0, 14, WORLD.size + 20);
-    this.scene.add(wall);
-    this.tsunami = wall;
-    return wall;
+    // A towering wave wall that surges from the OPEN SEA BEHIND the diver (-Z) toward the far shore
+    // (+Z) they flee to — logically chasing them onto land. White foam crest sells the motion.
+    // `tsunamiVel` is the +Z surge speed (bumped during the escape cutscene).
+    const grp = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(WORLD.size * 2.4, 44, 12),
+      new THREE.MeshStandardMaterial({ color: 0x1e6fa0, transparent: true, opacity: 0.88, flatShading: true }));
+    grp.add(body);
+    const foam = new THREE.Mesh(new THREE.BoxGeometry(WORLD.size * 2.4, 7, 14),
+      new THREE.MeshStandardMaterial({ color: 0xeaf6ff, flatShading: true, emissive: 0x335577 }));
+    foam.position.set(0, 22, 1); grp.add(foam);
+    grp.position.set(0, 14, WORLD.beachZ - 14);   // behind the dive start, out in the open sea
+    this.scene.add(grp);
+    this.tsunami = grp;
+    this.tsunamiVel = 7.5;                         // +Z surge speed
+    return grp;
   }
 
   update(dt, t) {
@@ -96,8 +104,8 @@ export class Effects {
     }
 
     if (this.tsunami) {
-      this.tsunami.position.z -= dt * 12;
-      this.tsunami.material.color.offsetHSL(0, 0, Math.sin(t * 10) * 0.002);
+      this.tsunami.position.z += dt * (this.tsunamiVel || 7.5);   // surge toward the far shore (+Z)
+      this.tsunami.position.y = 14 + Math.sin(t * 3) * 0.8;       // heave
     }
   }
 }
