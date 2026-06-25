@@ -142,16 +142,16 @@ export class Game {
   }
 
   _buildEnvironment() {
-    const hemi = new THREE.HemisphereLight(0xcdeeff, 0x0a3a52, 1.05);
-    this.scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff3d0, 1.15);
+    const hemi = new THREE.HemisphereLight(0xdff2ff, 0x2a5a44, 1.2);
+    this.scene.add(hemi); this._hemi = hemi;
+    const sun = new THREE.DirectionalLight(0xfff3d0, 1.35);
     sun.position.set(40, 80, 20);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.left = -120; sun.shadow.camera.right = 120;
     sun.shadow.camera.top = 120; sun.shadow.camera.bottom = -120;
     sun.shadow.camera.far = 250;
-    this.scene.add(sun);
+    this.scene.add(sun); this._sun = sun;
 
     // Seabed
     const seabed = new THREE.Mesh(
@@ -225,10 +225,27 @@ export class Game {
     if (this.effects?.bubbles) this.effects.bubbles.visible = visible;
   }
 
+  // Bright, cheerful daytime sky for the hub; deep underwater blue for dives. Hub and levels
+  // share one scene, so the mood is swapped here instead of baked in once.
+  _setSky(mode) {
+    if (mode === 'hub') {
+      this.scene.background.set(0x86cdf2);                    // sunny sky blue
+      this.scene.fog.color.set(0xa6dcf5); this.scene.fog.near = 120; this.scene.fog.far = 480; // far haze, bright
+      if (this._hemi) this._hemi.intensity = 1.5;
+      if (this._sun) this._sun.intensity = 1.5;
+    } else {
+      this.scene.background.set(0x0a3d62);                    // deep sea
+      this.scene.fog.color.set(0x0a3d62); this.scene.fog.near = 60; this.scene.fog.far = 180;
+      if (this._hemi) this._hemi.intensity = 1.2;
+      if (this._sun) this._sun.intensity = 1.3;
+    }
+  }
+
   // Enter the walkable island hub (reuses Player + chase camera + camera-relative input).
   enterHub() {
     this.disposeLevel();
     this.mode = 'hub';
+    this._setSky('hub');
     this._setWater(false);             // dry island look
     this.player = new Player(this.scene, this.economy, this._skinColor());
     this.hub = new Hub(this.scene, this.economy, this.save);
@@ -247,6 +264,7 @@ export class Game {
     this.mode = 'level';
     this.audio.stopAmbient();
     this._committedHeading = null; this._lastRawAngle = null;
+    this._setSky('level');
     this._setWater(true);
     const def = LEVELS[index];
     this.levelIndex = index;
@@ -270,10 +288,34 @@ export class Game {
       this.level.onBossDefeated = () => this._bossDefeat();
       this.level.bossCtrl.onShake = (a) => { this.shake = Math.max(this.shake, a); };
       this._bossIntro(this.level.boss);
+    } else if (this.level.def.tsunami) {
+      // Level 6: an escape intro — frame the far shore/city goal while the banner explains the
+      // tsunami comes from BEHIND, so the player knows which way to swim.
+      this._escapeIntro();
     } else if (!this.level.def.tsunami) {
       // Dive levels (1-4): ride the wooden boat out, then dive in and start swimming.
       this._diveIntro();
     }
+  }
+
+  // Level 6 opener: drop the player into the water, pan toward the far shore (the goal), and tell
+  // them the wave is coming from behind. ~2.6s, then control is handed over.
+  _escapeIntro() {
+    this.controlLocked = true;
+    this.player.pos.set(0, 1.3, WORLD.beachZ + 28);   // already in the water, fleeing forward
+    this.player.mesh.rotation.y = 0;
+    const car = this.level.car;
+    const goalZ = car ? car.position.z : WORLD.size;
+    this.onCine({ title: '🌊 TSUNAMI INCOMING!', sub: 'Swim to the FAR SHORE ahead — the car is your escape!' });
+    let t = 0; const dur = 2.6;
+    this.cinematic = (dt) => {
+      t += dt;
+      const px = this.player.pos.x, pz = this.player.pos.z;
+      this.camera.position.lerp(new THREE.Vector3(px, 7, pz - this.camRadius * 0.5), Math.min(1, dt * 3));
+      this.camera.lookAt(0, 4, goalZ);              // look toward the far shore/city goal
+      if (t >= dur) { this.onCine(null); this.cinematic = null; this.controlLocked = false; this.camYaw = 0; return true; }
+      return false;
+    };
   }
 
   // --- Win feedback: player reaches the submarine -> it surfaces and ferries them to the
@@ -426,21 +468,33 @@ export class Game {
         if (k >= 1) { this.player.mesh.visible = false; this.audio.pickup(); c.phase = 1; c.t = 0; }
         return false;
       }
-      // BEAT 2 (~4s): floor it into the city (+Z), wave chasing; rumbling chase cam.
-      const t = c.t;
-      const carSpeed = 16 + t * 8;                          // ends among the city buildings
-      car.position.z += carSpeed * dt;
-      car.position.x += Math.sin(t * 2.5) * dt * 1.4;     // weave for drama
-      if (t > c.shk) { c.shk = t + 0.22; this.shake = Math.max(this.shake, 0.3); }
-      const behind = new THREE.Vector3(car.position.x - 3.5, shoreY + 6, car.position.z - 17);
-      this.camera.position.lerp(behind, Math.min(1, dt * 2.6));
-      if (this.shake > 0) { this.camera.position.x += (Math.random() - 0.5) * this.shake; this.camera.position.y += (Math.random() - 0.5) * this.shake; this.shake = Math.max(0, this.shake - dt * 1.5); }
-      this.camera.lookAt(car.position.x, shoreY + 1.6, car.position.z + 10); // look ahead toward the city
-      if (t >= 4.0) {
+      if (c.phase === 1) {
+        // BEAT 2 (~4s): floor it into the city (+Z), wave chasing; rumbling chase cam. The sky
+        // shifts toward DUSK as you reach the city — a sunset getaway.
+        const t = c.t;
+        const carSpeed = 16 + t * 8;                          // ends among the city buildings
+        car.position.z += carSpeed * dt;
+        car.position.x += Math.sin(t * 2.5) * dt * 1.4;       // weave for drama
+        const dk = Math.min(1, t / 4);                        // day -> dusk
+        this.scene.background.lerpColors(new THREE.Color(0x86cdf2), new THREE.Color(0xff8c5a), dk);
+        this.scene.fog.color.copy(this.scene.background);
+        if (t > c.shk) { c.shk = t + 0.22; this.shake = Math.max(this.shake, 0.3); }
+        const behind = new THREE.Vector3(car.position.x - 3.5, shoreY + 6, car.position.z - 17);
+        this.camera.position.lerp(behind, Math.min(1, dt * 2.6));
+        if (this.shake > 0) { this.camera.position.x += (Math.random() - 0.5) * this.shake; this.camera.position.y += (Math.random() - 0.5) * this.shake; this.shake = Math.max(0, this.shake - dt * 1.5); }
+        this.camera.lookAt(car.position.x, shoreY + 1.6, car.position.z + 10); // look ahead toward the city
+        if (t >= 4.0) { c.phase = 2; c.t = 0; this.onCine({ title: '🎉 YOU ESCAPED!', sub: 'Into the city, safe and free' }); this.audio.win(); }
+        return false;
+      }
+      // BEAT 3 (~1.7s): hold a "YOU ESCAPED!" banner OVER the live 3D as the car cruises off into
+      // the dusk city — a cinematic closer before the credits (not a plain text screen).
+      car.position.z += 12 * dt;
+      this.camera.lookAt(car.position.x, shoreY + 1.6, car.position.z + 10);
+      if (c.t >= 1.7) {
         this.onCine(null);
         this.cinematic = null;
         this.running = false;
-        this.onWin(this.levelIndex); // -> UI._win -> _ending() text + credits (closer after the 3D scene)
+        this.onWin(this.levelIndex); // -> UI._win -> _ending() short closer + credits
         return true;
       }
       return false;

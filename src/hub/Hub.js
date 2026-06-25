@@ -72,7 +72,7 @@ export class Hub {
     // (rotation.y = +PI/2 turns the +Z-facing facade toward the player); teller stands out front.
     const FACE_RIGHT = Math.PI / 2;   // a +Z-facing model now faces +X (toward plaza centre)
     const bank = makeBank(); bank.rotation.y = FACE_RIGHT; this.add(bank, -36, 0, -16);
-    this._zone('bank', 'bank', -30, -10, 5.5, 0xffd166); this._solid(-36, -16, 6);
+    this._zone('bank', 'bank', -29.5, -16, 5, 0xffd166); this._solid(-36, -16, 6);  // ring squarely in front of the door (z=-16)
     this._npc(-30.5, -16, 0x2c3e50, 0x111111, FACE_RIGHT);  // teller standing in front of the facade
 
     // LUCKY WHEEL just below the Bank, also facing the plaza; the player stands on the ring in
@@ -88,13 +88,13 @@ export class Hub {
     // staffed stall rather than an empty box with someone loitering beside it.
     const FACE_LEFT = -Math.PI / 2;   // a +Z-facing kiosk now faces -X (toward plaza centre)
     const skinShop = makeKiosk('SKINS', 0x9b59b6, 0x2ec4ff); skinShop.rotation.y = FACE_LEFT; this.add(skinShop, 40, 0, -20); this._solid(40, -20, 5.5);
-    this._zone('skinshop', 'skins', 31, -20, 5, 0x9b59b6); this._npc(36.5, -20, 0x9b59b6, 0x2ec4ff, FACE_LEFT);
+    this._zone('skinshop', 'skins', 34, -20, 5, 0x9b59b6); this._npc(36.5, -20, 0x9b59b6, 0x2ec4ff, FACE_LEFT);
 
     const accShop = makeKiosk('GEAR', 0xf1c40f, 0xff9f43); accShop.rotation.y = FACE_LEFT; this.add(accShop, 40, 0, -4); this._solid(40, -4, 5.5);
-    this._zone('accshop', 'accessories', 31, -4, 5, 0xf1c40f); this._npc(36.5, -4, 0xe67e22, 0xffffff, FACE_LEFT);
+    this._zone('accshop', 'accessories', 34, -4, 5, 0xf1c40f); this._npc(36.5, -4, 0xe67e22, 0xffffff, FACE_LEFT);
 
     const upgShop = makeKiosk('UPGRADES', 0x06d6a0, 0x2ecc71); upgShop.rotation.y = FACE_LEFT; this.add(upgShop, 40, 0, 12); this._solid(40, 12, 5.5);
-    this._zone('upgradeshop', 'upgrades', 31, 12, 5, 0x06d6a0); this._npc(36.5, 12, 0x16a085, 0xffd166, FACE_LEFT);
+    this._zone('upgradeshop', 'upgrades', 34, 12, 5, 0x06d6a0); this._npc(36.5, 12, 0x16a085, 0xffd166, FACE_LEFT);
 
     // GARAGE SHOWROOM — its OWN building in the back-RIGHT (clearly off the Tower's centre axis so
     // the two never overlap from the approach). A proper roofed showroom with spotlit bays; the

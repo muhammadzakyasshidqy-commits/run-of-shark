@@ -23,3 +23,6 @@ ft.json
 it.json
 hub-*.png
 player-*.png
+
+# committed player-POV proof screenshots (override the hub-*/player-* basename ignores above)
+!docs/proof/*.png

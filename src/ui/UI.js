@@ -306,26 +306,19 @@ export class UI {
     });
   }
 
-  // ---------- ENDING CINEMATIC ----------
+  // ---------- ENDING ----------
+  // The STORY is told by the 3D escape cutscene (Game._escapeCutscene): diver gets in the car,
+  // floors it into the city as the tsunami chases. So this is just a short celebratory CLOSER —
+  // not a wall of text re-narrating what was just shown.
   _ending() {
     this.showHud(false);
-    const lines = [
-      '🌊 A GIANT TSUNAMI rises over the island...',
-      'You sprint to the LUXURY CAR and floor it up the cliff road.',
-      'The wave ROARS behind you — closer, closer...',
-      'Tires screaming, you crest the summit — and the wave breaks below.',
-      'YOU ESCAPED THE TSUNAMI!',
-    ];
-    this.audio.tsunami();
-    let idx = 0;
-    const s = h('div', 'screen'); s.style.background = 'linear-gradient(180deg,#06324a,#04263d)';
-    const txt = h('div', 'cine-text'); s.appendChild(txt);
-    this.clear(); this.root.appendChild(s);
-    const tick = () => {
-      if (idx < lines.length) { txt.textContent = lines[idx++]; this.audio.click(); setTimeout(tick, 2200); }
-      else this._credits(s);
-    };
-    tick();
+    this.audio.win();
+    const s = h('div', 'screen'); s.style.background = 'linear-gradient(180deg,#1a6fa0,#04263d)';
+    const card = h('div', 'card');
+    card.appendChild(h('h2', 'head', '🎉 YOU ESCAPED!'));
+    card.appendChild(h('div', 'subtitle', 'You outran the tsunami and reached the city. Freedom! 🚗🌆'));
+    s.appendChild(card); this.clear(); this.root.appendChild(s);
+    setTimeout(() => this._credits(s), 1900);
   }
 
   _credits(s) {
@@ -445,10 +438,16 @@ export class UI {
       const s = h('div', 'screen'); const card = h('div', 'card');
       const e = this.economy;
       card.appendChild(h('h2', 'head', '🏦 Bank'));
-      card.appendChild(h('div', 'subtitle', `Vault: ${e.s.bank} / ${e.bankCapacity}  •  Cash: ${e.s.cash}`));
-      card.appendChild(h('div', 'muted', 'Convert level coins into cash, then keep it safe in the bank.'));
+      // What the bank is FOR, in plain words, so the player knows why they walked in here.
+      card.appendChild(h('div', 'muted', 'Coins you grab in dives are spent on upgrades. Convert spare coins into 💵 cash, then keep cash safe in the 🏦 vault — banked cash is never lost, and a bigger vault holds more.'));
+      // current balances, shown big and clear
+      const bal = h('div', 'row');
+      bal.appendChild(h('div', 'chip coin-chip', `🪙 ${e.s.coins} coins`));
+      bal.appendChild(h('div', 'chip', `💵 ${e.s.cash} cash`));
+      bal.appendChild(h('div', 'chip', `🏦 ${e.s.bank} / ${e.bankCapacity} vault`));
+      card.appendChild(bal);
       const r0 = h('div', 'row');
-      r0.appendChild(this.btn('Convert 100🪙→10💵', 'small', () => { const c = e.convertCoinsToCash(100); this.toast(c ? `+${c} cash` : 'Need 10+ coins'); this.showBank(); }));
+      r0.appendChild(this.btn('Convert 100🪙 → 10💵', 'small', () => { const c = e.convertCoinsToCash(100); this.toast(c ? `+${c} cash` : 'Need 10+ coins'); this.showBank(); }));
       card.appendChild(r0);
       const r1 = h('div', 'row');
       r1.appendChild(this.btn('Deposit 50', 'green small', () => { e.deposit(50); this.showBank(); }));

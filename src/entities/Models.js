@@ -393,7 +393,15 @@ export function makeSubmarine() {
   const ring = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.12, 8, 24), mat(0x06d6a0, false, { emissive: 0x0a3320 }));
   ring.rotation.x = Math.PI / 2; ring.position.y = 0.2; g.add(ring);
   g.userData.ring = ring; // gameplay anim contract
-  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  // GOAL BEACON — a tall green glow column + floating down-arrow so the player can spot the
+  // submarine (the objective) from across the level and knows which way to swim.
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.6, 30, 10, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0x7dffc4, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
+  beam.position.y = 15; g.add(beam);
+  const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.9, 2, 5), mat(0x06d6a0, false, { emissive: 0x0a3320, emissiveIntensity: 1 }));
+  arrow.rotation.x = Math.PI; arrow.position.y = 6; g.add(arrow);
+  g.userData.goalArrow = arrow;
+  g.traverse((o) => { if (o.isMesh && o !== beam) o.castShadow = true; });
   return g;
 }
 
