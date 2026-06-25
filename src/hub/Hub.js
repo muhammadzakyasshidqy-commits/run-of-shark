@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { makeBank, makeGarage, makeTower, makeZoneMarker, makeNPC, makeSign, makeLuckyWheel, makeKiosk } from './buildings.js';
 import { makeDock, makeBoat, makeSeaVehicle } from '../entities/Models.js';
+import { removeAndDispose } from '../systems/dispose.js';
 import { VEHICLES } from '../config.js';
 
 // Coastline, not an island: solid LAND covers the back/sides (where every building sits) and
@@ -259,5 +260,5 @@ export class Hub {
     }
   }
 
-  dispose() { this.objects.forEach((o) => this.scene.remove(o)); this.objects = []; }
+  dispose() { this.objects.forEach((o) => removeAndDispose(this.scene, o)); this.objects = []; }
 }

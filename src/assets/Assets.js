@@ -48,7 +48,17 @@ function buildRoot(scene, fit, yaw, fitBy) {
   scene.position.x -= c.x;
   scene.position.z -= c.z;
   scene.position.y -= box.min.y;
-  scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true; o.receiveShadow = true;
+      // Tag this model's geometry + textures as CACHED so scene-teardown disposal (dispose.js)
+      // never frees them — every clone shares these originals, and freeing them would break
+      // future clones. (Per-instance cloned material objects stay safe to dispose.)
+      if (o.geometry) { o.geometry.userData = o.geometry.userData || {}; o.geometry.userData.cachedAsset = true; }
+      const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+      for (const m of mats) for (const k in m) { const v = m[k]; if (v && v.isTexture) { v.userData = v.userData || {}; v.userData.cachedAsset = true; } }
+    }
+  });
   // 3) inner group carries the baked yaw; outer group is what callers transform
   const inner = new THREE.Group(); inner.rotation.y = yaw || 0; inner.add(scene);
   const outer = new THREE.Group(); outer.add(inner);

@@ -1,6 +1,7 @@
 // Player — movement, stamina/sprint, magnet radius. Driven by Input + Economy stats.
 import * as THREE from 'three';
 import { makeDiver, makeAccessory, makeSeaVehicle } from './Models.js';
+import { removeAndDispose } from '../systems/dispose.js';
 import { WORLD, VEHICLES } from '../config.js';
 
 export class Player {
@@ -244,5 +245,5 @@ export class Player {
     return d;
   }
 
-  dispose(scene) { scene.remove(this.mesh); }
+  dispose(scene) { removeAndDispose(scene, this.mesh); }
 }

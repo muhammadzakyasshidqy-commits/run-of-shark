@@ -183,7 +183,7 @@ export class UI {
        ['🎁', 'Daily', () => this.showDaily()], ['⚙️', 'Settings', () => this.showSettings()]].forEach(([ic, l, f]) =>
         grid.appendChild(this.btn(`${ic} ${l}`, 'small', f)));
       card.appendChild(grid);
-      card.appendChild(this.btn('📺 Free Coins (Watch Ad)', 'gold small wide', async () => {
+      if (this.ads.available) card.appendChild(this.btn('📺 Free Coins (Watch Ad)', 'gold small wide', async () => {
         if (await this.ads.rewarded()) { this.economy.addCoins(200); this.toast('+200 coins!'); this.showMenu(); }
       }));
       card.appendChild(h('div', 'menu-credit', 'A game by <b>HARUN</b> · Dev <b>ZAKY</b>'));
@@ -280,10 +280,9 @@ export class UI {
       r.appendChild(this.btn('Next ▶', 'green', () => this.startLevel(Math.min(i + 1, LEVELS.length - 1))));
       r.appendChild(this.btn('🏝️ Island', 'small', () => this.returnToHub()));
       card.appendChild(r);
-      card.appendChild(h('div', 'row', ''));
-      card.appendChild(this.btn('📺 Watch Ad → 2x Coins', 'gold small', async () => {
+      if (this.ads.available) { card.appendChild(h('div', 'row', '')); card.appendChild(this.btn('📺 Watch Ad → 2x Coins', 'gold small', async () => {
         if (await this.ads.rewarded()) { this.economy.addCoins(reward); this.toast(`+${reward} bonus coins!`); }
-      }));
+      })); }
       s.appendChild(card); return s;
     });
   }
@@ -298,10 +297,9 @@ export class UI {
       r.appendChild(this.btn('Retry', 'green', () => this.startLevel(i)));
       r.appendChild(this.btn('🏝️ Island', 'small ghost', () => this.returnToHub()));
       card.appendChild(r);
-      card.appendChild(h('div', 'row', ''));
-      card.appendChild(this.btn('📺 Watch Ad → Revive', 'gold small', async () => {
+      if (this.ads.available) { card.appendChild(h('div', 'row', '')); card.appendChild(this.btn('📺 Watch Ad → Revive', 'gold small', async () => {
         if (await this.ads.rewarded()) { this.clear(); this.showHud(true); this.game.startLevel(i); }
-      }));
+      })); }
       s.appendChild(card); return s;
     });
   }
@@ -595,11 +593,13 @@ export class UI {
         doSpin(spinBtn);
       });
       card.appendChild(spinBtn);
-      const adBtn = this.btn('Free Spin (📺 Ad)', 'small', async () => {
-        if (this._wheelSpinning) return;
-        if (await this.ads.rewarded()) doSpin(adBtn);
-      });
-      card.appendChild(adBtn);
+      if (this.ads.available) {
+        const adBtn = this.btn('Free Spin (📺 Ad)', 'small', async () => {
+          if (this._wheelSpinning) return;
+          if (await this.ads.rewarded()) doSpin(adBtn);
+        });
+        card.appendChild(adBtn);
+      }
       card.appendChild(result); card.appendChild(this.back());
       s.appendChild(card); return s;
     });

@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { WORLD } from '../config.js';
 import { makeCoin, makeTreasure, makeCoral, makeBoat, makeSubmarine, makeShip, makeCar, makeLuxuryCar, makeHazard, makeDock } from '../entities/Models.js';
 import { makeSign } from '../hub/buildings.js';
+import { removeAndDispose } from '../systems/dispose.js';
 import { Shark } from '../entities/Shark.js';
 import { BossController } from '../bosses/BossController.js';
 
@@ -362,12 +363,12 @@ export class Level {
   }
 
   dispose() {
-    [...this.coins, ...this.corals, ...this.barriers].forEach((m) => this.scene.remove(m));
-    if (this.dock) this.scene.remove(this.dock);
-    this.hazards.forEach((hz) => this.scene.remove(hz.mesh));
+    [...this.coins, ...this.corals, ...this.barriers].forEach((m) => removeAndDispose(this.scene, m));
+    removeAndDispose(this.scene, this.dock);
+    this.hazards.forEach((hz) => removeAndDispose(this.scene, hz.mesh));
     if (this.bossCtrl) this.bossCtrl.dispose();
     this.sharks.forEach((s) => s.dispose(this.scene));
-    [this.boat, this.submarine, this.ship, this.car].forEach((m) => m && this.scene.remove(m));
-    if (this.effects.tsunami) { this.scene.remove(this.effects.tsunami); this.effects.tsunami = null; }
+    [this.boat, this.submarine, this.ship, this.car, this._city].forEach((m) => removeAndDispose(this.scene, m));
+    if (this.effects.tsunami) { removeAndDispose(this.scene, this.effects.tsunami); this.effects.tsunami = null; }
   }
 }

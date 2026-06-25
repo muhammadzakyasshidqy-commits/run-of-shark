@@ -44,7 +44,16 @@ export class SaveManager {
       const raw = localStorage.getItem(KEY);
       if (!raw) return structuredClone(DEFAULT_SAVE);
       const parsed = JSON.parse(raw);
-      return { ...structuredClone(DEFAULT_SAVE), ...parsed };
+      const d = structuredClone(DEFAULT_SAVE);
+      // DEEP-merge the nested objects so an OLD save (missing a newer settings/upgrades/player
+      // key) inherits the default for that key instead of dropping it (a shallow spread would
+      // replace the whole nested object and leave new fields undefined).
+      return {
+        ...d, ...parsed,
+        settings: { ...d.settings, ...(parsed.settings || {}) },
+        upgrades: { ...d.upgrades, ...(parsed.upgrades || {}) },
+        player: { ...d.player, ...(parsed.player || {}) },
+      };
     } catch (e) {
       console.warn('Save load failed, using defaults', e);
       return structuredClone(DEFAULT_SAVE);

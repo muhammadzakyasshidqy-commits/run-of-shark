@@ -1,6 +1,7 @@
 // Shark — chasing AI with wander, plus boss behaviours (charge/roar/wave).
 import * as THREE from 'three';
 import { makeShark } from './Models.js';
+import { removeAndDispose } from '../systems/dispose.js';
 import { SHARK_TYPES, WORLD } from '../config.js';
 
 export class Shark {
@@ -148,5 +149,5 @@ export class Shark {
   }
 
   distanceTo(p) { return Math.hypot(p.x - this.pos.x, p.z - this.pos.z); }
-  dispose(scene) { scene.remove(this.mesh); }
+  dispose(scene) { removeAndDispose(scene, this.mesh); }
 }
