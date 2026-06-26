@@ -106,3 +106,57 @@ export const WHEEL_PRIZES = [
   { label: '+5 Gems',    apply: (e) => e.addGems(5) },
   { label: '+25 Cash',   apply: (e) => e.addCash(25) },
 ];
+
+// ---------------------------------------------------------------------------
+// ENDLESS MODE — procedurally generated dive levels after the 6-level story.
+// A smooth, PLATEAUING difficulty curve so every depth stays theoretically solvable (with gear +
+// skill) and never spikes to impossible. Seeded by the level number so a given Depth is
+// reproducible. Returns the same `def` shape Level consumes (sharks/corals/maze/splitRoute/...).
+// ---------------------------------------------------------------------------
+const ENDLESS_TYPES = ['normal', 'fast', 'mutant', 'hammerhead', 'ghost'];
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export const ENDLESS_START = 7; // first endless depth (Levels 1-6 are the story)
+
+export function makeEndlessLevel(n) {
+  n = Math.max(ENDLESS_START, Math.min(9999, Math.floor(n) || ENDLESS_START));
+  const d = n - 6;                                       // difficulty step: 1, 2, 3, ...
+  const rng = mulberry32((n * 2654435761) >>> 0);        // deterministic per depth
+  // shark COUNT ramps slowly, hard cap 5 (so the screen never becomes unplayable)
+  const count = Math.min(2 + Math.floor(d / 3), 5);
+  // type POOL widens with depth (tougher silhouettes unlock deeper)
+  const pool = ENDLESS_TYPES.slice(0, Math.min(1 + Math.floor(d / 3), ENDLESS_TYPES.length));
+  const sharks = [];
+  for (let i = 0; i < count; i++) {
+    const type = pool[Math.floor(rng() * pool.length)];
+    sharks.push({ type, delay: Math.max(0.5, 1.3 - d * 0.03) + i * 0.7 });
+  }
+  // SPEED multiplier: asymptotic, capped ~1.7x — fast but always outrun-able with upgrades/vehicle
+  const speedMult = +(1 + 0.7 * (1 - Math.exp(-d / 18))).toFixed(3);
+  // layout variety so it isn't monotonous: every 5th depth a MAZE, every 5th (offset) a SPLIT route
+  const maze = n % 5 === 0;
+  const splitRoute = !maze && n % 5 === 2;
+  const corals = maze ? 0 : Math.min(4 + Math.floor(d * 0.8), 22);
+  const def = {
+    id: n, endless: true, depth: n, name: `Depth ${n}`,
+    coinsToWin: Math.min(10 + Math.floor(d / 2), 22),    // pickups in the level (awarded on WIN only)
+    sharks, corals, maze, splitRoute, speedMult,
+    objective: `🌊 ENDLESS · Depth ${n} — reach the submarine! ${count} shark${count > 1 ? 's' : ''} hunting`,
+  };
+  if (splitRoute) def.barriers = [{ x: 0, z: 35, hx: 2.5, hz: 50 }];
+  return def;
+}
+
+// One-time coin bonus for CLEARING an endless depth (on WIN). Grows with depth but sub-linearly
+// (sqrt) so deep dives pay more while shallow farming stays inefficient (anti-exploit).
+export function endlessClearBonus(n) {
+  const d = Math.max(1, n - 6);
+  return Math.round(10 + 6 * Math.sqrt(d));
+}

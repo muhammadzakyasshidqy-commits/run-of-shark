@@ -1,7 +1,7 @@
 // Game — owns the Three.js scene, render loop, camera, and the active Level.
 // The UI layer drives it via startLevel(); Game reports results via callbacks.
 import * as THREE from 'three';
-import { WORLD, LEVELS } from './config.js';
+import { WORLD, LEVELS, makeEndlessLevel, endlessClearBonus, ENDLESS_START } from './config.js';
 import { Player } from './entities/Player.js';
 import { Level } from './levels/Level.js';
 import { Hub } from './hub/Hub.js';
@@ -53,6 +53,8 @@ export class Game {
     this.cinematic = null;     // function(dt) -> done:boolean, drives cutscene camera
     this.onWin = () => {};
     this.onLose = () => {};
+    this.onEndlessLose = () => {};   // (depth, record) -> UI shows endless game-over
+    this.endless = false; this.endlessLevel = null;
     this.onHud = () => {};
     this.onCine = () => {};     // ({title, sub}) or null — UI shows/hides the cinematic banner
     this.onFlash = () => {};    // brief white screen flash (UI), used on big hits/victories
@@ -259,14 +261,18 @@ export class Game {
     this.input.setTouchVisible(true);
   }
 
-  startLevel(index) {
+  // startLevel(index)            -> a story level (LEVELS[index])
+  // startLevel(-1, endlessDef)   -> a procedurally generated ENDLESS level (def from makeEndlessLevel)
+  startLevel(index, endlessDef = null) {
     this.disposeLevel();
     this.mode = 'level';
     this.audio.stopAmbient();
     this._committedHeading = null; this._lastRawAngle = null;
     this._setSky('level');
     this._setWater(true);
-    const def = LEVELS[index];
+    const def = endlessDef || LEVELS[index];
+    this.endless = !!(endlessDef && endlessDef.endless);
+    this.endlessLevel = this.endless ? endlessDef.depth : null;
     this.levelIndex = index;
     this.player = new Player(this.scene, this.economy, this._skinColor());
     this.level = new Level(this.scene, def, this.economy, this.audio, this.effects);
@@ -288,6 +294,9 @@ export class Game {
       this.level.onBossDefeated = () => this._bossDefeat();
       this.level.bossCtrl.onShake = (a) => { this.shake = Math.max(this.shake, a); };
       this._bossIntro(this.level.boss);
+    } else if (this.endless) {
+      // ENDLESS: quick start (no boat ride between depths) — drop into the water and go.
+      this._endlessIntro();
     } else if (this.level.def.tsunami) {
       // Level 6: an escape intro — frame the far shore/city goal while the banner explains the
       // tsunami comes from BEHIND, so the player knows which way to swim.
@@ -296,6 +305,46 @@ export class Game {
       // Dive levels (1-4): ride the wooden boat out, then dive in and start swimming.
       this._diveIntro();
     }
+  }
+
+  // Start (or continue) ENDLESS mode at the given depth (>= ENDLESS_START).
+  startEndless(depth = ENDLESS_START) {
+    this.startLevel(-1, makeEndlessLevel(Math.max(ENDLESS_START, depth | 0)));
+  }
+
+  // Short endless opener (~1.2s banner) then control — keeps auto-advance snappy.
+  _endlessIntro() {
+    this.player.pos.set(0, 1.3, WORLD.beachZ + 24); this.player.mesh.rotation.y = 0; this.camYaw = 0;
+    this.controlLocked = true;
+    this.onCine({ title: `🌊 DEPTH ${this.endlessLevel}`, sub: `${this.level.def.sharks.length} sharks — reach the sub!` });
+    let t = 0;
+    this.cinematic = (dt) => {
+      t += dt;
+      this.camera.position.lerp(new THREE.Vector3(0, 6, this.player.pos.z - this.camRadius), Math.min(1, dt * 4));
+      this.camera.lookAt(0, 1.4, this.player.pos.z + this.camAhead);
+      if (t >= 1.2) { this.onCine(null); this.cinematic = null; this.controlLocked = false; return true; }
+      return false;
+    };
+  }
+
+  // Endless WIN: pay the run's held pickups + a sqrt-scaled clear bonus, update the record, then
+  // AUTO-ADVANCE to the next depth (dispose runs in startLevel, so resources are freed each time).
+  _endlessWin() {
+    const n = this.endlessLevel;
+    const runCoins = this.level.collected || 0;
+    const bonus = endlessClearBonus(n);
+    this.economy.addCoins(runCoins + bonus);
+    const s = this.save.data;
+    if (n > (s.highestEndless || 0)) { s.highestEndless = n; this.save.markDirty(); }
+    this.audio.win();
+    this.controlLocked = true;
+    this.onCine({ title: `✅ DEPTH ${n} CLEARED`, sub: `+${runCoins + bonus} coins · next: Depth ${n + 1}` });
+    let t = 0;
+    this.cinematic = (dt) => {
+      t += dt;
+      if (t >= 1.8) { this.onCine(null); this.cinematic = null; this.startEndless(n + 1); return true; }
+      return false;
+    };
   }
 
   // Level 6 opener: drop the player into the water, pan toward the far shore (the goal), and tell
@@ -597,12 +646,18 @@ export class Game {
           hp: this.player.hp, maxHp: this.player.maxHp,
           danger: this._nearestSharkDist() < 8,
           boss: this.level.boss && this.level.boss.active ? this.level.boss.hp / this.level.boss.maxHp : null,
+          endlessDepth: this.endless ? this.endlessLevel : null,   // HUD badge in endless mode
         });
         if (result === 'win') {
-          if (this.level.def.tsunami && this.level.car) this._escapeCutscene();   // final escape
+          if (this.endless) this._endlessWin();                                   // auto-advance to next depth
+          else if (this.level.def.tsunami && this.level.car) this._escapeCutscene(); // final escape
           else this._subToShip();                                                 // dive level: sub -> ship
         }
-        else if (result === 'lose') { this.running = false; this.shake = 1.2; this.onLose(this.levelIndex); }
+        else if (result === 'lose') {
+          this.running = false; this.shake = 1.2;
+          if (this.endless) this.onEndlessLose(this.endlessLevel, this.save.data.highestEndless || 0);
+          else this.onLose(this.levelIndex);
+        }
       }
     } else {
       // idle menu camera orbit

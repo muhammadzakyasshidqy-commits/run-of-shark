@@ -19,8 +19,10 @@ export function makeSign(text, w = 5, bg = '#0a3d62', fg = '#ffd166') {
   while (ctx.measureText(text).width > maxW && size > 12);
   ctx.fillText(text, 128, 34);
   const tex = new THREE.CanvasTexture(cv);
+  // DoubleSide so a sign is never invisible (or shows a blank back) from any angle — the label is
+  // legible from the front; callers set rotation.y so the FRONT faces the player's approach.
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 4),
-    new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }));
   m.userData.isSign = true;
   return m;
 }

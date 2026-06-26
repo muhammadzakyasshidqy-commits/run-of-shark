@@ -80,7 +80,7 @@ export class Hub {
     // FRONT of the wheel (+X side) to spin it.
     this.wheelObj = makeLuckyWheel(6); this.add(this.wheelObj, -36, 0, 4);
     this.wheelObj.rotation.y = FACE_RIGHT;   // disc faces +X (toward the approaching player)
-    this.add(makeSign('LUCKY WHEEL', 5, '#3a0d1a', '#ff6b6b'), -36, 7.4, 4);
+    const wheelSign = makeSign('LUCKY WHEEL', 5, '#3a0d1a', '#ff6b6b'); wheelSign.rotation.y = FACE_RIGHT; this.add(wheelSign, -36, 7.4, 4); // face the plaza (+X), like the wheel
     this._zone('wheel', 'wheel', -30, 4, 4.2, 0xff6b6b);   // ring on the +X (plaza) side of the wheel
     this._npc(-31, 8, 0xff6b6b, 0xffd166, FACE_RIGHT);   // carnival barker beside the wheel
 
@@ -126,7 +126,7 @@ export class Hub {
     // Boat moored beside the pier near the SHORE end (where the dive ring is), floating in the
     // shallows with its hull half-submerged and bow to sea — so the player plainly sees "board here".
     const boat = makeBoat(); boat.scale.setScalar(1.35); this.add(boat, 5, -0.3, WATERLINE + 6); boat.rotation.y = 0;
-    this.add(makeSign('DOCK — START DIVE', 7, '#10243a', '#06d6a0'), 0, 2.4, WATERLINE - 2);
+    const dockSign = makeSign('DOCK — START DIVE', 7, '#10243a', '#06d6a0'); dockSign.rotation.y = Math.PI; this.add(dockSign, 0, 2.4, WATERLINE - 2); // face the player walking up from -Z
     this._zone('dock', 'levels', 0, WATERLINE + 2, 5, 0x06d6a0);
 
     // Palms for life — placed only at the open LAND corners, well clear of every building front,

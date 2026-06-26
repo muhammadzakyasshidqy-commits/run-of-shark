@@ -18,6 +18,7 @@ const DEFAULT_SAVE = {
   equippedSkin: 'blue',
   equippedAccessory: null,
   highestLevel: 1,
+  highestEndless: 0,     // deepest ENDLESS depth cleared (0 = none yet)
   levelsCleared: 0,
   bossesBeaten: 0,
   totalCoins: 0,

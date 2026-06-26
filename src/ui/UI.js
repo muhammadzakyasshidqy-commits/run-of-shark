@@ -1,6 +1,6 @@
 // UI — all DOM screens: menu, levels, shop, bank, garage, inventory, settings,
 // achievements, daily reward, lucky wheel, HUD, win/lose, and the ending cinematic.
-import { LEVELS, UPGRADES, SKINS, ACCESSORIES, VEHICLES, ACHIEVEMENTS, WHEEL_PRIZES } from '../config.js';
+import { LEVELS, UPGRADES, SKINS, ACCESSORIES, VEHICLES, ACHIEVEMENTS, WHEEL_PRIZES, ENDLESS_START } from '../config.js';
 import { dailyStatus, claimDaily } from '../economy/daily.js';
 import { saveSupabaseConfig, resolveSupabaseConfig } from '../save/supabaseConfig.js';
 
@@ -21,6 +21,7 @@ export class UI {
     game.onHud = (s) => this._updateHud(s);
     game.onWin = (i) => this._win(i);
     game.onLose = (i) => this._lose(i);
+    game.onEndlessLose = (depth, record) => this._endlessLose(depth, record);
     game.onCine = (data) => this._cine(data);
     game.onHubTrigger = (panel) => this._openHubPanel(panel);
     game.onFlash = () => this._flash();
@@ -124,6 +125,7 @@ export class UI {
   _updateHud(s) {
     this.hud.querySelector('.hud-coins').textContent = s.coins;
     this.hud.querySelector('.hud-objective').textContent = s.objective;
+    if (s.endlessDepth) this.hud.querySelector('.hud-level').textContent = `🌊 DEPTH ${s.endlessDepth}`;
     // In the hub there is no combat: hide HP / stamina / boss / danger.
     const hub = !!s.hub;
     this.hud.querySelector('.hud-top').querySelector('.chip:nth-child(2)').style.display = hub ? 'none' : '';
@@ -207,9 +209,26 @@ export class UI {
         list.appendChild(it);
       });
       card.appendChild(list);
+      // ENDLESS MODE unlocks once the 6-level story is done. Shows the player's record + a button
+      // that starts an endless run (always from Depth 7, ramping up — see how deep you get).
+      const storyDone = this.debugUnlock || this.save.data.highestLevel > LEVELS.length || (this.save.data.levelsCleared || 0) >= LEVELS.length;
+      if (storyDone) {
+        const rec = this.save.data.highestEndless || 0;
+        const ei = h('div', 'item');
+        ei.appendChild(h('div', null, `<div class="name">🌊 ENDLESS MODE</div><div class="lvl">Procedural depths, ever harder · Record: <b>Depth ${rec || '—'}</b></div>`));
+        ei.appendChild(this.btn('Dive ▶', 'gold small', () => this.startEndless(ENDLESS_START)));
+        list.appendChild(ei);
+      }
+      card.appendChild(list);
       card.appendChild(this.back());
       s.appendChild(card); return s;
     });
+  }
+
+  startEndless(depth) {
+    this.clear(); this.showHud(true);
+    this.audio.unlock();
+    this.fade(true, () => { this.game.startEndless(depth); this.fade(false); });
   }
 
   startLevel(i) {
@@ -300,6 +319,22 @@ export class UI {
       if (this.ads.available) { card.appendChild(h('div', 'row', '')); card.appendChild(this.btn('📺 Watch Ad → Revive', 'gold small', async () => {
         if (await this.ads.rewarded()) { this.clear(); this.showHud(true); this.game.startLevel(i); }
       })); }
+      s.appendChild(card); return s;
+    });
+  }
+
+  // Endless run ended: show how deep this run got + the all-time record, then offer a fresh dive.
+  _endlessLose(depth, record) {
+    this.showHud(false);
+    this.open(() => {
+      const s = h('div', 'screen'); const card = h('div', 'card');
+      card.appendChild(h('div', 'title', '<span class="accent">CAUGHT!</span>'));
+      card.appendChild(h('div', 'subtitle', `You reached <b>Depth ${depth}</b>`));
+      card.appendChild(h('div', 'muted', `Best ever: Depth ${record || depth}`));
+      const r = h('div', 'row');
+      r.appendChild(this.btn('🌊 Dive Again', 'green', () => { this.clear(); this.showHud(true); this.game.startEndless(ENDLESS_START); }));
+      r.appendChild(this.btn('🏝️ Island', 'small ghost', () => this.returnToHub()));
+      card.appendChild(r);
       s.appendChild(card); return s;
     });
   }

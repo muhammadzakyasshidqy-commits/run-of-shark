@@ -34,7 +34,9 @@ export class Level {
     this.onBossDefeated = () => {}; // wired by Game (runs defeat cutscene then win)
     this.tsunamiActive = false;
     this._sharkQueue = (def.sharks || []).map((s) => ({ ...s, spawned: false }));
-    this.speedMult = 1 + (def.id - 1) * 0.12;
+    // Endless defs supply their own (bounded) speedMult; story levels derive it from the level id.
+    // (Without this, an endless Depth-50 would compute a 6.9x shark speed and be impossible.)
+    this.speedMult = def.speedMult ?? (1 + (def.id - 1) * 0.12);
 
     this._build();
   }
@@ -303,7 +305,9 @@ export class Level {
         // accessory coinMult (crown / backpack / pirate hat) raises every coin's payout
         const val = Math.round(c.userData.value * this.economy.coinMultiplier());
         this.collected += val;
-        this.economy.addCoins(val);
+        // ENDLESS: hold the run's coins and pay them out ONLY on WIN (so dying mid-level then
+        // restarting can't farm pickups). Story levels bank coins immediately as before.
+        if (!this.def.endless) this.economy.addCoins(val);
         c.userData.chest ? this.audio.pickup() : this.audio.coin();
         this.effects.burst(c.position, 0xffd166, c.userData.chest ? 18 : 10);
         this.scene.remove(c);
