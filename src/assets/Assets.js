@@ -15,21 +15,27 @@ import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.j
 
 // fit = target length in world units (matches the old primitive footprint);
 // yaw = rotation (rad) baked so the model's "forward" points +X (our car convention).
+//
+// URLs are built from Vite's BASE_URL (the configured `base`, './' here) so the .glb files resolve
+// RELATIVE to wherever index.html is served. Absolute '/models/..' broke on portals/itch.io where
+// the game runs from a SUBFOLDER iframe (the leading slash hit the iframe origin root → 404).
+const BASE = import.meta.env.BASE_URL;                 // './' in production, '/' in dev
+const glb = (name) => `${BASE}models/${name}.glb`;
 const MANIFEST = {
   // Garage now sells procedural SEA VEHICLES; the only car GLB still used is the L6 luxury prize.
-  car_luxury: { url: '/models/car_luxury.glb', fit: 3.8, yaw: 0 },
+  car_luxury: { url: glb('car_luxury'), fit: 3.8, yaw: 0 },
   // Animated fish (skinned, built-in swim clip). yaw VERIFIED by marker render (facing-verify.mjs):
   // both fish meshes have their SNOUT at local -X and TAIL at +X, so yaw +PI/2 rotates the snout
   // to local +X — the forward axis Shark._face (rotation.y = atan2(-dz, dx)) drives. Earlier -PI/2
   // pointed the snout at -X and the shark swam TAIL-FIRST.
-  fish_shark: { url: '/models/fish_shark.glb', fit: 4.2, yaw: Math.PI / 2 }, // snout -X -> +X
-  fish_manta: { url: '/models/fish_manta.glb', fit: 5.0, yaw: Math.PI / 2 },
+  fish_shark: { url: glb('fish_shark'), fit: 4.2, yaw: Math.PI / 2 }, // snout -X -> +X
+  fish_manta: { url: glb('fish_manta'), fit: 5.0, yaw: Math.PI / 2 },
   // Diver VERIFIED facing -Z (its back is toward +Z). Player faces movement via rotation.y =
   // atan2(input.x, input.z), which points the model's LOCAL +Z at the movement — so yaw PI flips
   // the diver's forward (-Z) to +Z. Earlier yaw 0 made the diver walk/swim BACKWARD.
-  diver: { url: '/models/diver.glb', fit: 1.7, yaw: Math.PI, fitBy: 'height' }, // forward -Z -> +Z
+  diver: { url: glb('diver'), fit: 1.7, yaw: Math.PI, fitBy: 'height' }, // forward -Z -> +Z
   // Boat lies along Z; bow handled at placement. Car front = +Z (verified); placed facing player.
-  boat: { url: '/models/boat.glb', fit: 3.6, yaw: 0 },
+  boat: { url: glb('boat'), fit: 3.6, yaw: 0 },
 };
 
 const cache = {};   // name -> { root: THREE.Group, animations: [], skinned: bool }

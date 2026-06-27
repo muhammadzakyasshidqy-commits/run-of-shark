@@ -83,6 +83,13 @@ export class Level {
       }
     }
 
+    // Spawn helpers: keep every pickup/obstacle INSIDE the player's reachable area (the player is
+    // clamped to ±WORLD.size on X and [beachZ, WORLD.size] on Z) with a small margin off the wall,
+    // so nothing is wasted where you can't swim.
+    const M = 4;
+    const inX = (x) => Math.max(-(WORLD.size - M), Math.min(WORLD.size - M, x));
+    const inZ = (z) => Math.max(WORLD.beachZ + M, Math.min(WORLD.size - M, z));
+
     // Corals (obstacles) — now SOLID (collision r 0.75 ~ visual footprint).
     const addCoral = (x, z, seed) => {
       const c = makeCoral(seed); c.position.set(x, 0, z); c.rotation.y = Math.random() * Math.PI;
@@ -114,16 +121,18 @@ export class Level {
       for (let i = 0; i < coralCount; i++) {
         // split-route levels push corals into the RIGHT lane (the "slow but safe" path)
         const x = this.def.splitRoute ? 6 + Math.random() * (WORLD.size * 0.8) : (Math.random() - 0.5) * WORLD.size * 1.6;
-        addCoral(x, -40 + Math.random() * (WORLD.size + 30), i + this.def.id);
+        addCoral(inX(x), inZ(-40 + Math.random() * (WORLD.size + 30)), i + this.def.id);
       }
     }
 
-    // Coins / treasures
+    // Coins / treasures — spread across a REACHABLE band and clamped inside the player's bounds
+    // (the player is clamped to ±WORLD.size, so every pickup must land within that, with a margin
+    // off the wall — otherwise items would be wasted in places you can't swim to).
     const n = this.def.coinsToWin || 0;
     for (let i = 0; i < n; i++) {
       const isChest = i % 5 === 4;
       const m = isChest ? makeTreasure() : makeCoin();
-      m.position.set((Math.random() - 0.5) * WORLD.size * 1.5, isChest ? 0.2 : 1, -30 + Math.random() * (WORLD.size + 10));
+      m.position.set(inX((Math.random() - 0.5) * WORLD.size * 1.2), isChest ? 0.2 : 1, inZ(-30 + Math.random() * (WORLD.size + 10)));
       // Higher pickup value so the core collect loop itself pays well (was 1 / 5).
       m.userData.value = isChest ? 25 : 6;
       m.userData.chest = isChest;
@@ -141,7 +150,7 @@ export class Level {
       for (let i = 0; i < count; i++) {
         const type = TYPES[Math.floor(Math.random() * TYPES.length)];
         const pu = makePowerup(type);
-        pu.position.set((Math.random() - 0.5) * WORLD.size * 1.1, 1.2, 5 + Math.random() * (WORLD.size - 40));
+        pu.position.set(inX((Math.random() - 0.5) * WORLD.size * 1.1), 1.2, inZ(5 + Math.random() * (WORLD.size - 40)));
         pu.userData.bob = Math.random() * 6;
         this.scene.add(pu); this.powerups.push(pu);
       }
