@@ -25,6 +25,7 @@ const DEFAULT_SAVE = {
   achievements: [],
   dailyStreak: 0,
   lastDaily: 0,
+  missions: null,       // daily missions { day, list[], bonusClaimed } — built on demand by missions.js
   // joySensitivity + invertY apply to the movement joystick (kept). The camera is fully
   // automatic now, so there are no manual camera settings.
   settings: { music: true, sfx: true, volume: 0.8, joySensitivity: 1, invertY: false },

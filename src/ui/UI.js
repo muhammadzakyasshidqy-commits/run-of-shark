@@ -2,6 +2,7 @@
 // achievements, daily reward, lucky wheel, HUD, win/lose, and the ending cinematic.
 import { LEVELS, UPGRADES, SKINS, ACCESSORIES, VEHICLES, ACHIEVEMENTS, WHEEL_PRIZES, ENDLESS_START } from '../config.js';
 import { dailyStatus, claimDaily } from '../economy/daily.js';
+import { ensureDailyMissions, claimMission, bumpMission } from '../economy/missions.js';
 import { saveSupabaseConfig, resolveSupabaseConfig } from '../save/supabaseConfig.js';
 
 const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -25,6 +26,8 @@ export class UI {
     game.onCine = (data) => this._cine(data);
     game.onHubTrigger = (panel) => this._openHubPanel(panel);
     game.onFlash = () => this._flash();
+    game.onFloat = (o) => this._floatText(o);
+    game.onCombo = (n) => this._comboPop(n);
     this.showMenu();
   }
 
@@ -114,6 +117,7 @@ export class UI {
         <div class="chip"><span class="ico">❤️</span><span class="hud-hp">3</span></div>
       </div>
       <div class="hud-objective"></div>
+      <div class="hud-powerups"></div>
       <div class="boss-hp-wrap hidden"><div class="boss-hp-bar"></div></div>
       <div class="stamina-wrap"><div class="stamina-bar"></div></div>
       <button class="btn ghost small hud-pause" style="position:absolute;top:14px;right:16px;pointer-events:auto;">⏸</button>`;
@@ -122,10 +126,40 @@ export class UI {
     hud.querySelector('.hud-pause').onclick = () => this._pauseMenu();
   }
 
+  // Floating "+N" coin text that drifts up and fades (pooled-ish via auto-removal).
+  _floatText({ x, y, text, color, big }) {
+    const el = h('div', 'float-text', text);
+    el.style.left = `${x}px`; el.style.top = `${y}px`;
+    if (color) el.style.color = color;
+    if (big) el.style.fontSize = '28px';
+    this.root.appendChild(el);
+    requestAnimationFrame(() => { el.style.top = `${y - 64}px`; el.style.opacity = '0'; });
+    setTimeout(() => el.remove(), 850);
+  }
+
+  // "xN COMBO!" popup that pulses when you chain coin pickups.
+  _comboPop(n) {
+    let el = this.root.querySelector('.combo-pop');
+    if (!el) { el = h('div', 'combo-pop'); this.root.appendChild(el); }
+    el.textContent = `x${n} COMBO!`;
+    el.style.opacity = '1'; el.style.transform = 'translateX(-50%) scale(1.3)';
+    requestAnimationFrame(() => { el.style.transform = 'translateX(-50%) scale(1)'; });
+    clearTimeout(this._comboT); this._comboT = setTimeout(() => { el.style.opacity = '0'; }, 700);
+  }
+
   _updateHud(s) {
     this.hud.querySelector('.hud-coins').textContent = s.coins;
     this.hud.querySelector('.hud-objective').textContent = s.objective;
     if (s.endlessDepth) this.hud.querySelector('.hud-level').textContent = `🌊 DEPTH ${s.endlessDepth}`;
+    // active power-up indicators with remaining seconds (shield shows a charge, not a timer)
+    const pw = this.hud.querySelector('.hud-powerups');
+    if (pw) {
+      const p = s.powerups || {}; let html = '';
+      if (p.shield) html += '<span class="pw-chip">🛡️</span>';
+      if (p.magnet > 0) html += `<span class="pw-chip">🧲 ${Math.ceil(p.magnet)}s</span>`;
+      if (p.speed > 0) html += `<span class="pw-chip">⚡ ${Math.ceil(p.speed)}s</span>`;
+      pw.innerHTML = html;
+    }
     // In the hub there is no combat: hide HP / stamina / boss / danger.
     const hub = !!s.hub;
     this.hud.querySelector('.hud-top').querySelector('.chip:nth-child(2)').style.display = hub ? 'none' : '';
@@ -182,7 +216,8 @@ export class UI {
       card.appendChild(this.btn('🏝️ ENTER ISLAND', 'green wide', () => this.enterIsland()));
       const grid = h('div', 'menu-grid');
       [['🎽', 'Skins', () => this.showInventory()], ['🏆', 'Awards', () => this.showAchievements()],
-       ['🎁', 'Daily', () => this.showDaily()], ['⚙️', 'Settings', () => this.showSettings()]].forEach(([ic, l, f]) =>
+       ['🎯', 'Missions', () => this.showMissions()], ['🎁', 'Daily', () => this.showDaily()],
+       ['⚙️', 'Settings', () => this.showSettings()]].forEach(([ic, l, f]) =>
         grid.appendChild(this.btn(`${ic} ${l}`, 'small', f)));
       card.appendChild(grid);
       if (this.ads.available) card.appendChild(this.btn('📺 Free Coins (Watch Ad)', 'gold small wide', async () => {
@@ -533,6 +568,36 @@ export class UI {
     const st = dailyStatus(this.save.data);
     this.save.data._dailyAvailable = st.available;
   }
+  // ---------- DAILY MISSIONS ----------
+  showMissions() {
+    this.open(() => {
+      const s = h('div', 'screen'); const card = h('div', 'card');
+      const m = ensureDailyMissions(this.save);
+      card.appendChild(h('h2', 'head', '🎯 Daily Missions'));
+      card.appendChild(h('div', 'muted', 'New missions every day. Progress as you dive!'));
+      const list = h('div', 'list');
+      m.list.forEach((ms) => {
+        const done = ms.progress >= ms.target;
+        const it = h('div', 'item');
+        const pct = Math.min(100, Math.round((ms.progress / ms.target) * 100));
+        const rew = `🪙${ms.reward.coins || 0}${ms.reward.gems ? ` 💎${ms.reward.gems}` : ''}`;
+        it.appendChild(h('div', null,
+          `<div class="name">${ms.label}</div>` +
+          `<div class="lvl">${Math.min(ms.progress, ms.target)}/${ms.target} · reward ${rew}</div>` +
+          `<div class="mission-bar"><div class="mission-fill" style="width:${pct}%"></div></div>`));
+        if (ms.claimed) it.appendChild(h('div', 'lvl', '✓ Claimed'));
+        else if (done) it.appendChild(this.btn('Claim', 'gold small', () => { claimMission(this.save, this.economy, ms.id); this.showMissions(); }));
+        else it.appendChild(h('div', 'lvl', `${pct}%`));
+        list.appendChild(it);
+      });
+      card.appendChild(list);
+      const allDone = m.list.every((x) => x.claimed);
+      card.appendChild(h('div', allDone ? 'subtitle' : 'muted', allDone ? '🏆 All done — bonus claimed!' : 'Finish all 3 for a bonus: 🪙150 💎1'));
+      card.appendChild(this.back());
+      s.appendChild(card); return s;
+    });
+  }
+
   showDaily() {
     this.open(() => {
       const s = h('div', 'screen'); const card = h('div', 'card');
@@ -603,6 +668,7 @@ export class UI {
       const doSpin = (btn) => {
         if (this._wheelSpinning) return;
         this._wheelSpinning = true; btn.disabled = true; result.textContent = 'Spinning…';
+        bumpMission(this.save, 'spin_wheel', 1);   // daily mission progress
         const index = Math.floor(Math.random() * N);
         // land slice `index` centre at the top: target ≡ -(index+0.5)*seg (mod 360); add ≥5 turns.
         const base = this._wheelAngle;

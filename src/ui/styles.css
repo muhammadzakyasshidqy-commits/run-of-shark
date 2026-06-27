@@ -25,6 +25,15 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #04263d; f
 
 .hud-level { position: absolute; top: 14px; left: 16px; }
 .hud-objective { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); background: rgba(6,214,160,.92); color: #04263d; font-weight: 800; padding: 6px 18px; border-radius: 999px; font-size: 14px; white-space: nowrap; }
+/* Active power-up indicators */
+.hud-powerups { position: absolute; top: 100px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
+.pw-chip { background: rgba(4,38,61,.82); color: #fff; font-weight: 800; padding: 5px 12px; border-radius: 999px; font-size: 14px; border: 2px solid rgba(255,255,255,.25); }
+/* Floating "+N" coin text + combo popup */
+.float-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 20px; color: #ffd166; text-shadow: 0 2px 6px rgba(0,0,0,.6); transform: translate(-50%,-50%); transition: top .8s ease-out, opacity .8s ease-out; opacity: 1; z-index: 50; }
+.combo-pop { position: absolute; top: 130px; left: 50%; transform: translateX(-50%) scale(1); pointer-events: none; font-weight: 900; font-size: 26px; color: #ff9f43; text-shadow: 0 2px 8px rgba(0,0,0,.5); transition: transform .15s, opacity .4s; z-index: 50; }
+/* Daily mission progress bar */
+.mission-bar { margin-top: 6px; height: 8px; border-radius: 999px; background: rgba(255,255,255,.14); overflow: hidden; }
+.mission-fill { height: 100%; background: linear-gradient(90deg,#06d6a0,#2ec4ff); border-radius: 999px; transition: width .3s; }
 
 /* Danger flash */
 .danger { position: absolute; inset: 0; box-shadow: inset 0 0 140px 30px rgba(255,0,0,0); transition: box-shadow .25s; }

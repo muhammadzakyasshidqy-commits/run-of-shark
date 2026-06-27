@@ -3,7 +3,7 @@
 // Boss levels and the final tsunami level are handled here too.
 import * as THREE from 'three';
 import { WORLD } from '../config.js';
-import { makeCoin, makeTreasure, makeCoral, makeBoat, makeSubmarine, makeShip, makeCar, makeLuxuryCar, makeHazard, makeDock } from '../entities/Models.js';
+import { makeCoin, makeTreasure, makeCoral, makeBoat, makeSubmarine, makeShip, makeCar, makeLuxuryCar, makeHazard, makeDock, makePowerup } from '../entities/Models.js';
 import { makeSign } from '../hub/buildings.js';
 import { removeAndDispose } from '../systems/dispose.js';
 import { Shark } from '../entities/Shark.js';
@@ -32,6 +32,8 @@ export class Level {
     this.boss = null;
     this.bossCtrl = null;
     this.onBossDefeated = () => {}; // wired by Game (runs defeat cutscene then win)
+    this.onCoin = () => {};         // (value, worldPos, isChest) -> juicy float text + combo (Game/UI)
+    this.onPowerup = () => {};      // (type, worldPos) -> juicy pickup feedback
     this.tsunamiActive = false;
     this._sharkQueue = (def.sharks || []).map((s) => ({ ...s, spawned: false }));
     // Endless defs supply their own (bounded) speedMult; story levels derive it from the level id.
@@ -129,6 +131,22 @@ export class Level {
       this.coins.push(m);
     }
 
+    // POWER-UPS — a few float in the dive (magnet / shield / speed). Rate is deliberately modest:
+    // ~1 guaranteed per dive + a 45% chance of a 2nd, so they feel special, not trivial. (Boss/
+    // tsunami finales skip them — those are scripted set-pieces.) Disposed with the level.
+    this.powerups = [];
+    if (!this.def.boss && !this.def.tsunami) {
+      const TYPES = ['magnet', 'shield', 'speed'];
+      const count = 1 + (Math.random() < 0.45 ? 1 : 0);
+      for (let i = 0; i < count; i++) {
+        const type = TYPES[Math.floor(Math.random() * TYPES.length)];
+        const pu = makePowerup(type);
+        pu.position.set((Math.random() - 0.5) * WORLD.size * 1.1, 1.2, 5 + Math.random() * (WORLD.size - 40));
+        pu.userData.bob = Math.random() * 6;
+        this.scene.add(pu); this.powerups.push(pu);
+      }
+    }
+
     // Level 6 final prize: the player swims AWAY from the tsunami toward a DRY FAR SHORE — a real
     // sandy beach rising out of the sea with a CITY skyline behind it (the escape destination).
     // The LUXURY CAR waits ON THE SAND (logical), not floating in the sea.
@@ -136,6 +154,8 @@ export class Level {
       this.submarine.visible = false;
       const goalZ = WORLD.size - 14;
       const shoreY = 4.6;                          // sand surface sits ABOVE the water (y=2.5)
+      // remember the dry-shore surface so the player WALKS (not swims) once they reach the beach
+      this._shoreY = shoreY; this._shoreFrontZ = goalZ - 3;
       // big dry beach landmass rising out of the water at the escape end — LONG (extends far +Z)
       // so the getaway car has a road of sand to drive on, all the way INTO the city.
       const shore = new THREE.Mesh(new THREE.BoxGeometry(WORLD.size * 2.4, 9, 280),
@@ -310,8 +330,23 @@ export class Level {
         if (!this.def.endless) this.economy.addCoins(val);
         c.userData.chest ? this.audio.pickup() : this.audio.coin();
         this.effects.burst(c.position, 0xffd166, c.userData.chest ? 18 : 10);
-        this.scene.remove(c);
+        this.onCoin(val, c.position, !!c.userData.chest);     // juicy float "+N" + combo
+        removeAndDispose(this.scene, c);
         this.coins.splice(i, 1);
+      }
+    }
+
+    // power-up animation (spin + bob) + pickup
+    for (let i = this.powerups.length - 1; i >= 0; i--) {
+      const pu = this.powerups[i];
+      pu.rotation.y += dt * 2; pu.position.y = 1.2 + Math.sin(this.elapsed * 2.5 + pu.userData.bob) * 0.25;
+      if (Math.hypot(pu.position.x - player.pos.x, pu.position.z - player.pos.z) < 1.4) {
+        player.givePower(pu.userData.power);
+        this.audio.pickup();
+        this.effects.burst(pu.position, pu.userData.power === 'shield' ? 0x2ec4ff : pu.userData.power === 'speed' ? 0xf1c40f : 0xe74c3c, 16);
+        this.onPowerup(pu.userData.power, pu.position);
+        removeAndDispose(this.scene, pu);
+        this.powerups.splice(i, 1);
       }
     }
 
@@ -324,6 +359,7 @@ export class Level {
       s.update(dt, player.pos);
       if (s.active && s.distanceTo(player.pos) < (s.isBoss ? 2.4 * s.def.scale : 1.6 * s.def.scale)) {
         if (player.damage(1)) { this.audio.hit(); this.effects.burst(player.pos, 0xff2d2d, 14); }
+        else if (player._shieldBroke) { player._shieldBroke = false; this.audio.pickup(); this.effects.burst(player.pos, 0x2ec4ff, 20); } // SHIELD absorbed a hit
       }
     }
 
@@ -357,6 +393,15 @@ export class Level {
     return null;
   }
 
+  // Dry-land stand height at (x,z), or null if that spot is open water. Player uses this to WALK
+  // (standing) on solid ground instead of swimming in midair. (Levels 1-5 are all water → null;
+  // Level 6 has the far DRY SHORE; the START beach behind the shoreline is dry too.)
+  landBaseY(x, z) {
+    if (this._shoreY != null && z >= this._shoreFrontZ) return this._shoreY + 0.15;  // L6 far beach
+    if (z <= WORLD.beachZ + 12) return 0.2;                                           // start beach (behind shoreline)
+    return null;                                                                      // open water
+  }
+
   get objectiveText() {
     if (this.def.boss && !this.def.tsunami) {
       if (this.bossCtrl && this.bossCtrl.state === 'telegraph') return '⚠ Attack incoming — DODGE!';
@@ -367,7 +412,7 @@ export class Level {
   }
 
   dispose() {
-    [...this.coins, ...this.corals, ...this.barriers].forEach((m) => removeAndDispose(this.scene, m));
+    [...this.coins, ...this.corals, ...this.barriers, ...(this.powerups || [])].forEach((m) => removeAndDispose(this.scene, m));
     removeAndDispose(this.scene, this.dock);
     this.hazards.forEach((hz) => removeAndDispose(this.scene, hz.mesh));
     if (this.bossCtrl) this.bossCtrl.dispose();

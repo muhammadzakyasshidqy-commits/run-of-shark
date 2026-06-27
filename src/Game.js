@@ -2,6 +2,7 @@
 // The UI layer drives it via startLevel(); Game reports results via callbacks.
 import * as THREE from 'three';
 import { WORLD, LEVELS, makeEndlessLevel, endlessClearBonus, ENDLESS_START } from './config.js';
+import { bumpMission } from './economy/missions.js';
 import { Player } from './entities/Player.js';
 import { Level } from './levels/Level.js';
 import { Hub } from './hub/Hub.js';
@@ -54,7 +55,10 @@ export class Game {
     this.onWin = () => {};
     this.onLose = () => {};
     this.onEndlessLose = () => {};   // (depth, record) -> UI shows endless game-over
+    this.onFloat = () => {};         // ({x,y,text,color,big}) -> UI floating "+N" text at screen pos
+    this.onCombo = () => {};         // (n) -> UI combo popup
     this.endless = false; this.endlessLevel = null;
+    this._combo = 1; this._lastCoinT = 0;
     this.onHud = () => {};
     this.onCine = () => {};     // ({title, sub}) or null — UI shows/hides the cinematic banner
     this.onFlash = () => {};    // brief white screen flash (UI), used on big hits/victories
@@ -276,6 +280,10 @@ export class Game {
     this.levelIndex = index;
     this.player = new Player(this.scene, this.economy, this._skinColor());
     this.level = new Level(this.scene, def, this.economy, this.audio, this.effects);
+    this.level.onCoin = (val, wp, chest) => this._juiceCoin(val, wp, chest);   // juicy pickups
+    this.level.onPowerup = (type, wp) => this._juicePowerup(type, wp);
+    this._combo = 1; this._lastCoinT = 0;
+    bumpMission(this.save, 'play_levels', 1);   // daily mission: a dive was started
     // Spawn ON the dry sand (a few units in front of the beach, behind the shoreline),
     // facing the water — so the level opens on the beach, not mid-ocean.
     this.player.pos.set(0, 0.2, WORLD.beachZ + 4);
@@ -336,15 +344,45 @@ export class Game {
     this.economy.addCoins(runCoins + bonus);
     const s = this.save.data;
     if (n > (s.highestEndless || 0)) { s.highestEndless = n; this.save.markDirty(); }
+    bumpMission(this.save, 'endless_depth', n, 'max');   // daily mission: deepest endless reached
     this.audio.win();
     this.controlLocked = true;
-    this.onCine({ title: `✅ DEPTH ${n} CLEARED`, sub: `+${runCoins + bonus} coins · next: Depth ${n + 1}` });
+    // milestone celebration every 10 depths
+    const milestone = n % 10 === 0;
+    if (milestone) { this.onFlash(); this.effects.burst(this.player.pos.clone().setY(2), 0xffd166, 30); }
+    this.onCine({ title: milestone ? `🏆 DEPTH ${n}!` : `✅ DEPTH ${n} CLEARED`, sub: `+${runCoins + bonus} coins · next: Depth ${n + 1}` });
     let t = 0;
     this.cinematic = (dt) => {
       t += dt;
       if (t >= 1.8) { this.onCine(null); this.cinematic = null; this.startEndless(n + 1); return true; }
       return false;
     };
+  }
+
+  // Project a world position to screen pixels (for floating text). Returns null if behind camera.
+  _projectToScreen(wp) {
+    const v = wp.clone().project(this.camera);
+    if (v.z > 1) return null;
+    const r = this.renderer.domElement;
+    return { x: (v.x * 0.5 + 0.5) * r.clientWidth, y: (-v.y * 0.5 + 0.5) * r.clientHeight };
+  }
+
+  // JUICY coin pickup: floating "+N" at the coin + a COMBO popup when you chain pickups quickly.
+  _juiceCoin(val, worldPos, isChest) {
+    const now = this.clock.elapsedTime;
+    this._combo = (now - this._lastCoinT < 1.2) ? this._combo + 1 : 1;
+    this._lastCoinT = now;
+    const sp = this._projectToScreen(worldPos);
+    if (sp) this.onFloat({ x: sp.x, y: sp.y, text: `+${val}`, color: isChest ? '#ffd166' : '#ffe9a8', big: isChest });
+    if (this._combo >= 3) this.onCombo(this._combo);
+    bumpMission(this.save, 'collect_coins', val);   // daily mission progress
+  }
+
+  _juicePowerup(type, worldPos) {
+    const label = type === 'magnet' ? '🧲 MAGNET' : type === 'shield' ? '🛡️ SHIELD' : '⚡ SPEED';
+    const sp = this._projectToScreen(worldPos);
+    if (sp) this.onFloat({ x: sp.x, y: sp.y, text: label, color: '#7dffc4', big: true });
+    this.onFlash();
   }
 
   // Level 6 opener: drop the player into the water, pan toward the far shore (the goal), and tell
@@ -374,6 +412,7 @@ export class Game {
     const sub = this.level.submarine, ship = this.level.ship;
     this.player.mesh.visible = false;            // "boards" the submarine
     this.effects.burst(sub.position, 0x9fd8ff, 18);
+    this.onFlash();                              // soft relief flash on reaching the sub
     this.audio.win();
     // Reveal the destination ship now (it was hidden during the dive) with a quick pop-in.
     ship.visible = true; ship.scale.setScalar(0.01);
@@ -629,6 +668,10 @@ export class Game {
       } else {
         this._committedHeading = null; this._lastRawAngle = null; // re-snapshot on next press
       }
+      // tell the Player whether it's standing on dry land (e.g. the L6 beach) vs in open water,
+      // so it walks/stands on sand instead of swimming there.
+      this.player._landBaseY = (this.mode === 'level' && this.level)
+        ? this.level.landBaseY(this.player.pos.x, this.player.pos.z) : null;
       this.player.update(dt, mv, this.mode);
       this._updateCamera(dt, raw.len > 0.12);
 
@@ -647,8 +690,10 @@ export class Game {
           danger: this._nearestSharkDist() < 8,
           boss: this.level.boss && this.level.boss.active ? this.level.boss.hp / this.level.boss.maxHp : null,
           endlessDepth: this.endless ? this.endlessLevel : null,   // HUD badge in endless mode
+          powerups: { magnet: this.player.power.magnet, speed: this.player.power.speed, shield: this.player.power.shield },
         });
         if (result === 'win') {
+          bumpMission(this.save, 'clear_levels', 1);                               // daily mission: a dive was cleared
           if (this.endless) this._endlessWin();                                   // auto-advance to next depth
           else if (this.level.def.tsunami && this.level.car) this._escapeCutscene(); // final escape
           else this._subToShip();                                                 // dive level: sub -> ship

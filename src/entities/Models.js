@@ -300,6 +300,25 @@ export function makeShark(color = 0x6c7a89, scale = 1, type = 'normal') {
   return g;
 }
 
+// POWER-UP pickup: a glowing colour-coded orb in a spinning ring. type ∈ magnet|shield|speed.
+// userData.power = type (Level reads it on pickup), userData.spin animates it.
+export function makePowerup(type = 'magnet') {
+  const palette = { magnet: 0xe74c3c, shield: 0x2ec4ff, speed: 0xf1c40f };
+  const col = palette[type] || 0xffffff;
+  const g = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.5, 0), mat(col, true, { emissive: col & 0x555555, emissiveIntensity: 0.8, metalness: 0.3 }));
+  g.add(core);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.08, 8, 18), mat(0xffffff, false, { emissive: col & 0x333333 }));
+  ring.rotation.x = Math.PI / 2; g.add(ring);
+  // a tiny glyph hint: magnet = two prongs, shield = disc, speed = chevrons
+  if (type === 'magnet') { for (const s of [-1, 1]) { const pr = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.4, 0.12), mat(0xffffff, false)); pr.position.set(s * 0.16, -0.28, 0); g.add(pr); } }
+  else if (type === 'shield') { const d = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.08, 12), mat(0xffffff, false)); d.position.z = 0.45; d.rotation.x = Math.PI / 2; g.add(d); }
+  else { for (let i = 0; i < 2; i++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.22, 4), mat(0xffffff, false)); c.rotation.z = -Math.PI / 2; c.position.set(0.1 + i * 0.18, 0, 0); g.add(c); } }
+  g.userData.spin = true; g.userData.power = type;
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+
 export function makeCoin() {
   const g = new THREE.Group();
   const coin = new THREE.Mesh(

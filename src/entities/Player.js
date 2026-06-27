@@ -20,6 +20,8 @@ export class Player {
     this.hp = 3 + Math.round(economy.statValue('resistance')) + economy.accessoryHpBonus();
     this.maxHp = this.hp;
     this._dashCd = 0; this._dashTime = 0;   // jetpack dash timers (level mode)
+    // POWER-UPS picked up mid-dive: magnet/speed are remaining seconds, shield is a one-hit charge.
+    this.power = { magnet: 0, speed: 0, shield: false };
     this._bob = 0;
     this._phase = 0;
     this.invuln = 0;
@@ -75,9 +77,19 @@ export class Player {
     this.mesh.add(veh); this._veh = veh;
   }
 
-  get magnetRadius() { return this.economy.statValue('magnet') + this.economy.accessoryMagnetBonus(); }
+  get magnetRadius() { return this.economy.statValue('magnet') + this.economy.accessoryMagnetBonus() + (this.power.magnet > 0 ? 10 : 0); }
+
+  // Grant a timed power-up (called when one is picked up in a level).
+  givePower(type) {
+    if (type === 'magnet') this.power.magnet = 7;
+    else if (type === 'speed') this.power.speed = 5;
+    else if (type === 'shield') this.power.shield = true;
+  }
 
   update(dt, input, mode = 'level') {
+    // tick timed power-ups
+    if (this.power.magnet > 0) this.power.magnet = Math.max(0, this.power.magnet - dt);
+    if (this.power.speed > 0) this.power.speed = Math.max(0, this.power.speed - dt);
     let baseSpeed = this.economy.statValue('speed');
     // EQUIPPED GEAR is functional during dives: the sea VEHICLE and an accessory's speedBonus
     // (jetpack) both raise swim speed; escape sharks more easily.
@@ -105,6 +117,7 @@ export class Player {
       if (wantSprint && this._dashCd <= 0) { this._dashTime = 0.45; this._dashCd = 2.6; }
       if (this._dashTime > 0) { speed *= 1.9; this._dashFlare(true); } else this._dashFlare(false);
     }
+    if (this.power.speed > 0) speed *= 1.5;   // SPEED power-up: temporary swim boost
     this._lastSpeed = speed;   // exposed for telemetry/tests (numeric proof of gear effect)
 
     this.vel.set(input.x, 0, input.z).multiplyScalar(speed);
@@ -121,19 +134,22 @@ export class Player {
       const targetRot = Math.atan2(input.x, input.z);
       this.mesh.rotation.y += this._angleDelta(this.mesh.rotation.y, targetRot) * Math.min(1, dt * 10);
     }
-    // Float height: in a dive level the diver floats up in the WATER COLUMN (so it reads as
-    // swimming, not dragging along the seabed); on land (hub) it stands at ground level. The
-    // base height eases between the two so entering/leaving the water doesn't pop. (pos.y is
-    // visual only — collision/goal/shark distances all use x/z.)
-    const targetBaseY = mode === 'level' ? 1.35 : 0.2;
+    // ON LAND vs IN WATER (by POSITION, not just mode): Game sets this._landBaseY to the dry-land
+    // stand height when the player is actually standing on solid ground in a level (e.g. the
+    // Level-6 far shore), or null when in open water. So reaching the beach SWITCHES to a standing
+    // WALK instead of swimming on dry sand.
+    const onLand = mode === 'level' && this._landBaseY != null;
+    // Float height: in water the diver floats in the WATER COLUMN; on land/hub it stands on the
+    // surface. The base height EASES between them so entering/leaving the water doesn't pop.
+    const targetBaseY = onLand ? this._landBaseY : (mode === 'level' ? 1.35 : 0.2);
     this._baseY = this._baseY ?? 0.2;
     this._baseY += (targetBaseY - this._baseY) * Math.min(1, dt * 3);
     this._bob += dt * (input.len > 0.1 ? 10 : 3);
     const bobAmp = this.mesh.userData.mixer ? 0.05 : 0.12;
     this.mesh.position.y = this._baseY + Math.sin(this._bob) * bobAmp;
 
-    if (this.mesh.userData.mixer) this._animateGLB(dt, input, mode);
-    else this._animate(dt, input.len, mode);
+    if (this.mesh.userData.mixer) this._animateGLB(dt, input, mode, onLand);
+    else this._animate(dt, input.len, mode, onLand);
 
     // Accessory follows its bone (GLB diver): the bone world position tracks the skinned head/
     // torso, so copy it into the root-local accessory each frame + a small world-up offset.
@@ -158,11 +174,13 @@ export class Player {
   // GLB diver: pick the built-in clip from mode + movement and advance the mixer. Levels use
   // the real Swim_Fwd/Swim_Idle clips (the model swims horizontally on its own); the hub uses
   // Idle/Walk/Sprint. No procedural lean — the clips already pose the body.
-  _animateGLB(dt, input, mode) {
+  _animateGLB(dt, input, mode, onLand = false) {
     const moving = input.len > 0.1;
     const wantSprint = input.sprint && moving && this.stamina > 1;
+    // Standing on dry land in a level reads as WALKING, not swimming on sand.
+    const swimming = mode === 'level' && !onLand;
     let clip;
-    if (mode === 'level') clip = moving ? 'swim' : 'swimIdle';
+    if (swimming) clip = moving ? 'swim' : 'swimIdle';
     else clip = moving ? (wantSprint ? 'sprint' : 'walk') : 'idle';
     this.mesh.userData.setAnim(clip);
     this.mesh.userData.mixer.update(dt);
@@ -172,13 +190,14 @@ export class Player {
   //  - SWIM (mode 'level', in the ocean): body leans ~horizontal/prone, arms do a
   //    front-crawl windmill, legs flutter-kick fast.
   //  - WALK (mode 'hub', on land): upright, arms & legs swing in opposition.
-  _animate(dt, len, mode) {
+  _animate(dt, len, mode, onLand = false) {
     const parts = this.mesh.userData.parts;
     if (!parts) return;
     const lean = this.mesh.userData.lean || this.mesh; // lean the mid-body pivot, not the feet
     const moving = len > 0.1;
+    const swimming = mode === 'level' && !onLand;
 
-    if (mode === 'level') {
+    if (swimming) {
       // lean the body forward into a prone swim pose, pivoting about its CENTRE so the
       // head stays near the surface (no nose-dive).
       const targetLean = moving ? -1.0 : -0.7;
@@ -232,6 +251,8 @@ export class Player {
 
   damage(n = 1) {
     if (this.invuln > 0) return false;
+    // SHIELD power-up absorbs one hit entirely (no HP lost), then breaks.
+    if (this.power.shield) { this.power.shield = false; this.invuln = 1.0; this._shieldBroke = true; return false; }
     this.hp -= n;
     this.invuln = 1.2;
     if (this.hp <= 0) this.alive = false;
