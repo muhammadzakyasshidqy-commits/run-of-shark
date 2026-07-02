@@ -13,7 +13,11 @@ export async function initCrazyGamesSDK() {
   const SDK = (typeof window !== 'undefined' && window.CrazyGames && window.CrazyGames.SDK) || null;
   if (!SDK) return null;
   try { await SDK.init(); } catch { return null; }
-  try { if (SDK.environment === 'disabled') return null; } catch { /* older shims: assume ok */ }
+  // WHITELIST: only turn ads on where they actually work — real CrazyGames, or localhost 'local'
+  // demo for dev. Every other host (itch.io / Cloudflare / 'disabled' / 'uninitialized') stays
+  // ad-free. (An unknown env or a missing `environment` field is treated as OFF.)
+  let env; try { env = SDK.environment; } catch { env = undefined; }
+  if (env !== 'crazygames' && env !== 'local') return null;
   return SDK;
 }
 
