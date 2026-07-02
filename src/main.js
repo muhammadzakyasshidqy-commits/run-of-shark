@@ -7,6 +7,8 @@ import { SupabaseProvider } from './save/CloudProvider.js';
 import { Game } from './Game.js';
 import { UI } from './ui/UI.js';
 import { loadAssets, assetsReady } from './assets/Assets.js';
+import * as portal from './portal/portal.js';
+import { setupCrazyGames } from './portal/crazygames.js';
 
 const canvas = document.getElementById('game-canvas');
 const uiRoot = document.getElementById('ui-root');
@@ -35,5 +37,14 @@ loadAssets();
 const unlock = () => { audio.unlock(); window.removeEventListener('pointerdown', unlock); };
 window.addEventListener('pointerdown', unlock);
 
-// Expose for debugging.
-window.__ROS = { game, economy, save, ui, cloud, assetsReady };
+// CrazyGames SDK v3 (if hosted there): enables real rewarded/midgame ads + analytics. On any other
+// host (itch.io / Cloudflare) it stays OFF and the game runs ad-free — see portal/crazygames.js.
+// Wire the Game's portal hooks: gameplayStart/Stop (on state change) + happytime at big moments.
+game.onGameplay = (active) => { if (active) portal.gameplayStart(); else portal.gameplayStop(); };
+game.onHappy = () => portal.happytime();
+setupCrazyGames({ ads, game, audio })
+  .then((r) => { if (r.enabled && document.querySelector('.menu-grid')) ui.showMenu(); }) // reveal the ad button once ready
+  .catch(() => {});
+
+// Expose for debugging + tests.
+window.__ROS = { game, economy, save, ui, cloud, assetsReady, ads, portal };

@@ -28,7 +28,13 @@ export class AudioManager {
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
 
-  setVolume(v) { this.settings.volume = v; if (this.master) this.master.gain.value = v; }
+  setVolume(v) { this.settings.volume = v; if (this.master && !this._muted) this.master.gain.value = v; }
+
+  // Hard mute/unmute the master bus (used while an ad plays — CrazyGames requirement).
+  mute(on) {
+    this._muted = !!on;
+    if (this.master) this.master.gain.value = on ? 0 : (this.settings.volume ?? 0.8);
+  }
 
   _beep(freq, dur, type = 'sine', gain = 0.3, slideTo = null) {
     if (!this.settings.sfx) return;

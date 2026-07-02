@@ -19,7 +19,9 @@ import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.j
 // URLs are built from Vite's BASE_URL (the configured `base`, './' here) so the .glb files resolve
 // RELATIVE to wherever index.html is served. Absolute '/models/..' broke on portals/itch.io where
 // the game runs from a SUBFOLDER iframe (the leading slash hit the iframe origin root → 404).
-const BASE = import.meta.env.BASE_URL;                 // './' in production, '/' in dev
+// Vite replaces import.meta.env.BASE_URL with the configured base ('./'); the guard keeps this
+// importable under plain Node (test harnesses) where import.meta.env is undefined.
+const BASE = (import.meta && import.meta.env && import.meta.env.BASE_URL) || '/';
 const glb = (name) => `${BASE}models/${name}.glb`;
 const MANIFEST = {
   // Garage now sells procedural SEA VEHICLES; the only car GLB still used is the L6 luxury prize.

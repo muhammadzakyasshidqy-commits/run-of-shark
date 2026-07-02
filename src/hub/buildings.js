@@ -207,9 +207,14 @@ export function makeLuckyWheel(segments = 6) {
     leg.position.set(s * 1.1, (R + 1.4) / 2, 0); leg.rotation.z = s * 0.32; g.add(leg);
   }
   const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.5, 8), mat(0x333333)); axle.rotation.x = Math.PI / 2; axle.position.set(0, R + 1.4, 0); g.add(axle);
-  // top pointer (triangle pointing down into the wheel)
-  const pointer = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.6, 4), mat(0xe74c3c, false, { emissive: 0x551111 }));
-  pointer.position.set(0, R + 1.4 + R + 0.1, 0); pointer.rotation.x = Math.PI; g.add(pointer);
+  // TOP POINTER — a clear red pin at the top of the wheel whose TIP reaches INTO the top segment
+  // (points at the winner). A smooth 12-sided cone reads as a downward pin from any angle, so the
+  // Hub's FACE_RIGHT rotation (about Y) can't make it look reversed. It sits slightly in FRONT of
+  // the disc (local +Z, which becomes toward the player after FACE_RIGHT) so the rim never hides it.
+  const pointer = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.7, 12), mat(0xe74c3c, false, { emissive: 0x661515, emissiveIntensity: 0.6 }));
+  pointer.rotation.x = Math.PI;                          // apex points DOWN into the wheel
+  pointer.position.set(0, R + 1.4 + R - 0.45, 0.5);      // tip ~0.45 past the top rim (into the segment), in front of the disc
+  g.add(pointer);
 
   g.userData.wheel = wheel;
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });

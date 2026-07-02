@@ -57,6 +57,9 @@ export class Game {
     this.onEndlessLose = () => {};   // (depth, record) -> UI shows endless game-over
     this.onFloat = () => {};         // ({x,y,text,color,big}) -> UI floating "+N" text at screen pos
     this.onCombo = () => {};         // (n) -> UI combo popup
+    this.onGameplay = () => {};      // (active:bool) -> portal gameplayStart/Stop (fired only on change)
+    this.onHappy = () => {};         // () -> portal happytime() at big moments
+    this._gameplayActive = false;
     this.endless = false; this.endlessLevel = null;
     this._combo = 1; this._lastCoinT = 0;
     this.onHud = () => {};
@@ -349,7 +352,7 @@ export class Game {
     this.controlLocked = true;
     // milestone celebration every 10 depths
     const milestone = n % 10 === 0;
-    if (milestone) { this.onFlash(); this.effects.burst(this.player.pos.clone().setY(2), 0xffd166, 30); }
+    if (milestone) { this.onFlash(); this.onHappy(); this.effects.burst(this.player.pos.clone().setY(2), 0xffd166, 30); }
     this.onCine({ title: milestone ? `🏆 DEPTH ${n}!` : `✅ DEPTH ${n} CLEARED`, sub: `+${runCoins + bonus} coins · next: Depth ${n + 1}` });
     let t = 0;
     this.cinematic = (dt) => {
@@ -499,6 +502,7 @@ export class Game {
     this.audio.win();
     this.shake = 1.0;                                   // impact shake
     this.onFlash && this.onFlash();                    // white screen flash (UI)
+    this.onHappy();                                     // portal happytime (big moment)
     // celebratory particle bursts around the boss
     for (let i = 0; i < 5; i++) this.effects.burst(boss.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 6, Math.random() * 4, (Math.random() - 0.5) * 6)), 0xffd166, 16);
     this.effects.ring(boss.pos, 0xffffff, 16, 0.6);
@@ -571,7 +575,7 @@ export class Game {
         this.camera.position.lerp(behind, Math.min(1, dt * 2.6));
         if (this.shake > 0) { this.camera.position.x += (Math.random() - 0.5) * this.shake; this.camera.position.y += (Math.random() - 0.5) * this.shake; this.shake = Math.max(0, this.shake - dt * 1.5); }
         this.camera.lookAt(car.position.x, shoreY + 1.6, car.position.z + 10); // look ahead toward the city
-        if (t >= 4.0) { c.phase = 2; c.t = 0; this.onCine({ title: '🎉 YOU ESCAPED!', sub: 'Into the city, safe and free' }); this.audio.win(); }
+        if (t >= 4.0) { c.phase = 2; c.t = 0; this.onCine({ title: '🎉 YOU ESCAPED!', sub: 'Into the city, safe and free' }); this.audio.win(); this.onHappy(); }
         return false;
       }
       // BEAT 3 (~1.7s): hold a "YOU ESCAPED!" banner OVER the live 3D as the car cruises off into
@@ -631,6 +635,11 @@ export class Game {
     if (this.debug) this._updateFps(dt);
     this._animateWater(t);
     this.effects.update(dt, t);
+
+    // Portal analytics: "active gameplay" = actually controlling a diver in a level (not menu, hub,
+    // cutscene, or pause). Fire onGameplay only when the state CHANGES (no double start/stop).
+    const activeGameplay = this.running && !this.paused && !this.controlLocked && this.mode === 'level';
+    if (activeGameplay !== this._gameplayActive) { this._gameplayActive = activeGameplay; this.onGameplay(activeGameplay); }
 
     // Cutscene takes over the camera and freezes gameplay.
     if (this.cinematic) {
